@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
 import { api } from "@/utils/api"
@@ -20,7 +21,6 @@ import {
   Eye,
   Edit,
   Trash2,
-  Plus,
   Calendar,
   User,
   Building2,
@@ -33,8 +33,8 @@ import {
   Paperclip,
   CheckCircle,
   PenTool,
-  Clock,
-  Shield,
+  RotateCcw,
+  XCircle,
 } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
@@ -54,24 +54,19 @@ interface RequestItem {
       firstName: string
       lastName: string
       email: string
-      avatar?: string
     }
     status: string
     _id: string
-    actionComment?: string
-    actionDate?: string
   }>
   priority: string
   category: string
   status: string
   createdAt: string
-  updatedAt: string
   createdBy: {
     _id: string
     firstName: string
     lastName: string
     email: string
-    avatar?: string
   }
   attachments: Array<{
     name: string
@@ -82,32 +77,20 @@ interface RequestItem {
   requiresSignature?: boolean
   signatureProvided?: boolean
   signatureData?: string
-  comments: Array<{
-    _id: string
-    author: {
-      _id: string
-      firstName: string
-      lastName: string
-      email: string
-      avatar?: string
-    }
-    text: string
-    isSignature?: boolean
-    signatureData?: string
-    createdAt: string
-    updatedAt: string
-  }>
+  comments: any[]
   actionComment?: string
   actionDate?: string
-  actionBy?: {
-    _id: string
-    firstName: string
-    lastName: string
-    email: string
-  }
 }
 
-export default function RequestsPage() {
+interface UserSignature {
+  enabled: boolean
+  type: "draw" | "upload" | "text"
+  data: string
+  cloudinaryId?: string
+  updatedAt: string
+}
+
+export default function ReviewedRequestsPage() {
   const { toast } = useToast()
   const authContext = useAuth()
   const [requests, setRequests] = useState<RequestItem[]>([])
@@ -116,9 +99,13 @@ export default function RequestsPage() {
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<"card" | "list">("card")
   const [selectedRequest, setSelectedRequest] = useState<RequestItem | null>(null)
+  const [actionComment, setActionComment] = useState("")
+  const [requireSignature, setRequireSignature] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isActionDialogOpen, setIsActionDialogOpen] = useState(false)
   const [editFormData, setEditFormData] = useState({
     title: "",
     description: "",
@@ -126,29 +113,53 @@ export default function RequestsPage() {
     category: "",
   })
   const [loadingRequestDetails, setLoadingRequestDetails] = useState(false)
+  const [userSignature, setUserSignature] = useState<UserSignature | null>(null)
+  const [loadingSignature, setLoadingSignature] = useState(false)
+  const [hasAddedSignatureToRequest, setHasAddedSignatureToRequest] = useState(false)
 
   // Redirect if not authenticated
   if (!authContext.isAuthenticated) {
     redirect("/login")
   }
 
-  // Fetch requests
+  // Fetch user signature
   useEffect(() => {
-    const fetchRequests = async () => {
+    const fetchUserSignature = async () => {
+      try {
+        setLoadingSignature(true)
+        const response = await api.getUserSignature(authContext)
+        if (response.success && response.data?.signature) {
+          setUserSignature(response.data.signature)
+        }
+      } catch (error) {
+        console.error("Error fetching user signature:", error)
+      } finally {
+        setLoadingSignature(false)
+      }
+    }
+
+    if (authContext.isAuthenticated) {
+      fetchUserSignature()
+    }
+  }, [authContext])
+
+  // Fetch reviewed requests
+  useEffect(() => {
+    const fetchReviewedRequests = async () => {
       try {
         setLoading(true)
-        const response = await api.getRequests(authContext)
+        const response = await api.getReviewedRequests(authContext)
 
         if (response.success && response.data) {
           setRequests(response.data.requests || [])
         } else {
-          throw new Error(response.error || "Failed to fetch requests")
+          throw new Error(response.error || "Failed to fetch reviewed requests")
         }
       } catch (error: any) {
-        console.error("Error fetching requests:", error)
+        console.error("Error fetching reviewed requests:", error)
         toast({
           title: "Error",
-          description: error.message || "Failed to load requests",
+          description: error.message || "Failed to load reviewed requests",
           variant: "destructive",
         })
       } finally {
@@ -156,8 +167,163 @@ export default function RequestsPage() {
       }
     }
 
-    fetchRequests()
+    fetchReviewedRequests()
   }, [authContext, toast])
+
+  const getActionIcon = (action: string) => {
+    switch (action) {
+      case "approve":
+        return CheckCircle
+      case "reject":
+        return XCircle
+      case "sendback":
+        return RotateCcw
+      case "signature":
+        return PenTool
+      default:
+        return CheckCircle
+    }
+  }
+
+  const getActionColor = (action: string) => {
+    switch (action) {
+      case "approve":
+        return "bg-green-500 hover:bg-green-600"
+      case "reject":
+        return "bg-red-500 hover:bg-red-600"
+      case "sendback":
+        return "bg-orange-500 hover:bg-orange-600"
+      case "signature":
+        return "bg-blue-500 hover:bg-blue-600"
+      default:
+        return "bg-gray-500 hover:bg-gray-600"
+    }
+  }
+
+  const addSignatureToRequest = async () => {
+    if (!selectedRequest || !userSignature?.enabled) return
+
+    try {
+      setIsProcessing(true)
+
+      // Add signature as a comment to the request
+      const signatureComment = {
+        comment: `Signature provided by ${authContext.user?.firstName} ${authContext.user?.lastName}`,
+        isSignature: true,
+        signatureData: userSignature.data,
+        signatureType: userSignature.type,
+      }
+
+      const response = await api.addRequestComment(selectedRequest._id, signatureComment, authContext)
+
+      if (response.success) {
+        setHasAddedSignatureToRequest(true)
+        toast({
+          title: "Signature added",
+          description: "Your signature has been added to this request",
+        })
+      } else {
+        throw new Error(response.error || "Failed to add signature")
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add signature",
+        variant: "destructive",
+      })
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleRequestAction = async (action: "approve" | "reject" | "sendback" | "signature") => {
+    if (!selectedRequest) return
+
+    // Validate comment for certain actions
+    if (!actionComment.trim() && (action === "reject" || action === "sendback")) {
+      toast({
+        title: "Comment required",
+        description: "Please provide a comment for this action",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsProcessing(true)
+
+    try {
+      const actionData = {
+        action,
+        comment: actionComment,
+        requireSignature: action === "signature" || requireSignature,
+      }
+
+      const response = await api.takeRequestAction(selectedRequest._id, actionData, authContext)
+
+      if (response.success) {
+        // Update the request in state
+        setRequests((prev) =>
+          prev.map((req) =>
+            req._id === selectedRequest._id
+              ? {
+                  ...req,
+                  status:
+                    action === "signature"
+                      ? "Need Signature"
+                      : action === "approve"
+                        ? "Approved"
+                        : action === "reject"
+                          ? "Rejected"
+                          : "Sent Back",
+                  actionComment: actionComment,
+                  actionDate: new Date().toISOString(),
+                  requiresSignature: action === "signature" ? true : selectedRequest.requiresSignature,
+                }
+              : req,
+          ),
+        )
+
+        setSelectedRequest(null)
+        setActionComment("")
+        setRequireSignature(false)
+        setHasAddedSignatureToRequest(false)
+        setIsActionDialogOpen(false)
+
+        toast({
+          title: `Request ${action}d successfully`,
+          description: `${selectedRequest.title} has been ${action}d`,
+        })
+      } else {
+        throw new Error(response.error || `Failed to ${action} request`)
+      }
+    } catch (error: any) {
+      toast({
+        title: "Action failed",
+        description: error.message || `Failed to ${action} request`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const openActionDialog = (request: RequestItem) => {
+    setSelectedRequest(request)
+    setActionComment("")
+    setRequireSignature(false)
+
+    // Check if user has already added signature to this request
+    if (request.comments) {
+      const hasSignature = request.comments.some(
+        (comment) => comment.author === authContext.user?._id && comment.isSignature === true,
+      )
+      setHasAddedSignatureToRequest(hasSignature)
+    } else {
+      setHasAddedSignatureToRequest(false)
+    }
+
+    setIsActionDialogOpen(true)
+  }
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -197,14 +363,6 @@ export default function RequestsPage() {
     const sizes = ["Bytes", "KB", "MB", "GB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
-  }
-
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString)
-    return {
-      date: date.toLocaleDateString(),
-      time: date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    }
   }
 
   const filteredRequests = requests.filter((request) => {
@@ -270,12 +428,20 @@ export default function RequestsPage() {
     }
   }
 
+  interface ApiResponse {
+    success: boolean
+    data?: {
+      request: RequestItem
+    }
+    error?: string
+  }
+
   const openViewDialog = async (request: RequestItem) => {
     try {
       setLoadingRequestDetails(true)
-      const response = await api.getRequest(request._id, authContext)
+      const response = (await api.getRequest(request._id, authContext)) as ApiResponse
 
-      if (response.success && response.data) {
+      if (response.success && response.data?.request) {
         setSelectedRequest(response.data.request)
       } else {
         setSelectedRequest(request) // fallback to current data
@@ -344,6 +510,10 @@ export default function RequestsPage() {
                   <Eye className="w-4 h-4 mr-2" />
                   View Details
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openActionDialog(request)}>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Take Action
+                </DropdownMenuItem>
                 {request.status.toLowerCase() === "pending" && (
                   <DropdownMenuItem onClick={() => openEditDialog(request)}>
                     <Edit className="w-4 h-4 mr-2" />
@@ -392,12 +562,6 @@ export default function RequestsPage() {
             <Badge variant="outline" size="sm">
               {request.category}
             </Badge>
-            {request.signatureProvided && (
-              <Badge className="bg-green-100 text-green-800" size="sm">
-                <PenTool className="w-3 h-3 mr-1" />
-                Signed
-              </Badge>
-            )}
           </div>
 
           {request.attachments && request.attachments.length > 0 && (
@@ -448,27 +612,15 @@ export default function RequestsPage() {
                 </div>
               </td>
               <td className="p-4">
-                <div className="flex items-center space-x-2">
-                  <Badge className={getStatusColor(request.status)} size="sm">
-                    {request.status}
-                  </Badge>
-                  {request.signatureProvided && (
-                    <Badge className="bg-green-100 text-green-800" size="sm">
-                      <PenTool className="w-3 h-3 mr-1" />
-                      Signed
-                    </Badge>
-                  )}
-                </div>
+                <Badge className={getStatusColor(request.status)}>{request.status}</Badge>
               </td>
               <td className="p-4">
-                <Badge className={getPriorityColor(request.priority)} size="sm">
+                <Badge className={getPriorityColor(request.priority)}>
                   {request.priority.charAt(0).toUpperCase() + request.priority.slice(1)}
                 </Badge>
               </td>
               <td className="p-4">
-                <Badge variant="outline" size="sm">
-                  {request.category}
-                </Badge>
+                <Badge variant="outline">{request.category}</Badge>
               </td>
               <td className="p-4">
                 <div className="text-sm text-slate-600">{new Date(request.createdAt).toLocaleDateString()}</div>
@@ -484,6 +636,10 @@ export default function RequestsPage() {
                     <DropdownMenuItem onClick={() => openViewDialog(request)}>
                       <Eye className="w-4 h-4 mr-2" />
                       View Details
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openActionDialog(request)}>
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Take Action
                     </DropdownMenuItem>
                     {request.status.toLowerCase() === "pending" && (
                       <DropdownMenuItem onClick={() => openEditDialog(request)}>
@@ -509,7 +665,7 @@ export default function RequestsPage() {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Loading requests...</span>
+        <span className="ml-2">Loading reviewed requests...</span>
       </div>
     )
   }
@@ -518,10 +674,13 @@ export default function RequestsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">My Requests</h1>
-          <p className="text-slate-600 mt-1">Track and manage your submitted requests</p>
+          <h1 className="text-3xl font-bold text-slate-800">Request Inbox</h1>
+          <p className="text-slate-600 mt-1">Review and process incoming requests</p>
         </div>
         <div className="flex items-center space-x-3">
+          <Badge variant="outline" className="text-orange-600 border-orange-200">
+            {filteredRequests.length} Pending
+          </Badge>
           <div className="flex items-center space-x-1 border rounded-lg p-1">
             <Button variant={viewMode === "card" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("card")}>
               <Grid3X3 className="w-4 h-4" />
@@ -530,12 +689,6 @@ export default function RequestsPage() {
               <List className="w-4 h-4" />
             </Button>
           </div>
-          <Link href="/dashboard/requests/create">
-            <Button className="bg-orange-500 hover:bg-orange-600">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Request
-            </Button>
-          </Link>
         </div>
       </div>
 
@@ -574,14 +727,8 @@ export default function RequestsPage() {
                 <p className="text-slate-600 mb-4">
                   {searchTerm || filterStatus !== "all"
                     ? "Try adjusting your search or filter criteria"
-                    : "You haven't created any requests yet"}
+                    : "You haven't been assigned any requests yet"}
                 </p>
-                <Link href="/dashboard/requests/create">
-                  <Button className="bg-orange-500 hover:bg-orange-600">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Your First Request
-                  </Button>
-                </Link>
               </CardContent>
             </Card>
           ) : viewMode === "card" ? (
@@ -596,29 +743,237 @@ export default function RequestsPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Action Dialog */}
+      <Dialog open={isActionDialogOpen} onOpenChange={setIsActionDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Take Action on Request</DialogTitle>
+            <DialogDescription>Review and take action on this request submission</DialogDescription>
+          </DialogHeader>
+
+          {selectedRequest && (
+            <div className="space-y-6">
+              {/* Request Summary */}
+              <div className="p-4 bg-slate-50 rounded-lg">
+                <h4 className="font-medium text-slate-800 mb-2">Request Summary</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-slate-600">Title:</span>
+                    <span className="ml-2 font-medium">{selectedRequest.title}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-600">Priority:</span>
+                    <Badge className={getPriorityColor(selectedRequest.priority)} size="sm">
+                      {selectedRequest.priority}
+                    </Badge>
+                  </div>
+                  <div>
+                    <span className="text-slate-600">Category:</span>
+                    <span className="ml-2 font-medium">{selectedRequest.category}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-600">Status:</span>
+                    <Badge className={getStatusColor(selectedRequest.status)} size="sm">
+                      {selectedRequest.status}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Request Signature Status */}
+              {selectedRequest.requiresSignature && (
+                <div className="p-4 border rounded-lg bg-blue-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <Label className="text-sm font-medium">Request Signature Status</Label>
+                    {hasAddedSignatureToRequest ? (
+                      <div className="flex items-center space-x-2 text-green-600">
+                        <CheckCircle className="w-4 h-4" />
+                        <span className="text-sm">Signature Added</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2 text-orange-600">
+                        <AlertCircle className="w-4 h-4" />
+                        <span className="text-sm">Signature Required</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {!hasAddedSignatureToRequest && (
+                    <p className="text-sm text-slate-600 mb-3">
+                      This request requires your signature before it can be approved.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* User Signature Status */}
+              {authContext.user?.role === "director" && (
+                <div className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <Label className="text-sm font-medium">Your Signature</Label>
+                    {loadingSignature ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : userSignature?.enabled ? (
+                      <div className="flex items-center space-x-2 text-green-600">
+                        <CheckCircle className="w-4 h-4" />
+                        <span className="text-sm">Available</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2 text-red-600">
+                        <XCircle className="w-4 h-4" />
+                        <span className="text-sm">Not Set Up</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {userSignature?.enabled && (
+                    <div className="p-3 bg-slate-50 rounded-lg mb-3">
+                      <Label className="text-xs text-slate-600 mb-2 block">Signature Preview</Label>
+                      {userSignature.type === "text" ? (
+                        <div className="text-lg font-script text-slate-800" style={{ fontFamily: "cursive" }}>
+                          {userSignature.data}
+                        </div>
+                      ) : (
+                        <img
+                          src={userSignature.data || "/placeholder.svg"}
+                          alt="Your signature"
+                          className="max-h-16 max-w-full object-contain"
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {!userSignature?.enabled ? (
+                    <div className="text-center py-2">
+                      <Link href="/dashboard/settings/signature">
+                        <Button variant="outline" size="sm">
+                          <PenTool className="w-4 h-4 mr-2" />
+                          Set Up Signature
+                        </Button>
+                      </Link>
+                    </div>
+                  ) : selectedRequest.requiresSignature && !hasAddedSignatureToRequest ? (
+                    <div className="text-center py-2">
+                      <Button
+                        onClick={addSignatureToRequest}
+                        disabled={isProcessing}
+                        className="bg-blue-500 hover:bg-blue-600"
+                      >
+                        {isProcessing ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <PenTool className="w-4 h-4 mr-2" />
+                        )}
+                        Add Signature to Request
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              {/* Comment Section */}
+              <div className="space-y-2">
+                <Label htmlFor="action-comment">Response Comment</Label>
+                <Textarea
+                  id="action-comment"
+                  placeholder="Add your response or feedback..."
+                  value={actionComment}
+                  onChange={(e) => setActionComment(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              {/* Signature Requirement Toggle */}
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-1">
+                  <Label htmlFor="require-signature">Require Signature/Consent</Label>
+                  <p className="text-sm text-slate-600">Request signature before final approval</p>
+                </div>
+                <Switch id="require-signature" checked={requireSignature} onCheckedChange={setRequireSignature} />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3">
+                {/* Approve Button - Only show if signature is not required OR signature has been added */}
+                {authContext.user?.role === "director" &&
+                  userSignature?.enabled &&
+                  (!selectedRequest.requiresSignature || hasAddedSignatureToRequest) && (
+                    <Button
+                      onClick={() => handleRequestAction("approve")}
+                      disabled={isProcessing}
+                      className="bg-green-500 hover:bg-green-600"
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                      )}
+                      Approve
+                    </Button>
+                  )}
+
+                {/* Request Signature Button */}
+                <Button
+                  onClick={() => handleRequestAction("signature")}
+                  disabled={isProcessing}
+                  className="bg-blue-500 hover:bg-blue-600"
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <PenTool className="w-4 h-4 mr-2" />
+                  )}
+                  Request Signature
+                </Button>
+
+                {/* Send Back Button */}
+                <Button
+                  onClick={() => handleRequestAction("sendback")}
+                  disabled={isProcessing}
+                  className="bg-orange-500 hover:bg-orange-600"
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                  )}
+                  Send Back
+                </Button>
+
+                {/* Reject Button */}
+                <Button
+                  onClick={() => handleRequestAction("reject")}
+                  disabled={isProcessing}
+                  className="bg-red-500 hover:bg-red-600"
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <XCircle className="w-4 h-4 mr-2" />
+                  )}
+                  Reject
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* View Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center space-x-2">
-              <span>Request Details: {selectedRequest?.title}</span>
-              {selectedRequest?.signatureProvided && (
-                <Badge className="bg-green-100 text-green-800">
-                  <PenTool className="w-3 h-3 mr-1" />
-                  Signed
-                </Badge>
-              )}
-            </DialogTitle>
+            <DialogTitle>Request Details: {selectedRequest?.title}</DialogTitle>
             <DialogDescription>Complete information about this request</DialogDescription>
           </DialogHeader>
 
           {selectedRequest && (
             <div className="space-y-6">
-              {/* Request Overview */}
-              <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
+              {/* Request Info */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-lg">
                 <div>
                   <Label className="text-sm font-medium text-slate-600">Category</Label>
-                  <p className="text-slate-800 capitalize">{selectedRequest.category}</p>
+                  <p className="text-slate-800">{selectedRequest.category}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-slate-600">Priority</Label>
@@ -629,56 +984,22 @@ export default function RequestsPage() {
                   <Badge className={getStatusColor(selectedRequest.status)}>{selectedRequest.status}</Badge>
                 </div>
                 <div>
+                  <Label className="text-sm font-medium text-slate-600">Department</Label>
+                  <p className="text-slate-800">
+                    {selectedRequest.targetDepartments.map((dept) => dept.name).join(", ")}
+                  </p>
+                </div>
+                <div>
                   <Label className="text-sm font-medium text-slate-600">Created</Label>
+                  <p className="text-slate-800">{new Date(selectedRequest.createdAt).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-slate-600">Created By</Label>
                   <p className="text-slate-800">
-                    {formatDateTime(selectedRequest.createdAt).date} at {formatDateTime(selectedRequest.createdAt).time}
+                    {selectedRequest.createdBy.firstName} {selectedRequest.createdBy.lastName}
                   </p>
                 </div>
-                <div>
-                  <Label className="text-sm font-medium text-slate-600">Last Updated</Label>
-                  <p className="text-slate-800">
-                    {formatDateTime(selectedRequest.updatedAt).date} at {formatDateTime(selectedRequest.updatedAt).time}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-slate-600">Request ID</Label>
-                  <p className="text-slate-800 font-mono text-sm">{selectedRequest._id}</p>
-                </div>
               </div>
-
-              {/* Requester Information */}
-              <div className="p-4 border rounded-lg">
-                <Label className="text-sm font-medium text-slate-600 mb-3 block">Submitted By</Label>
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
-                    <User className="w-5 h-5 text-orange-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-slate-800">
-                      {selectedRequest.createdBy.firstName} {selectedRequest.createdBy.lastName}
-                    </p>
-                    <p className="text-sm text-slate-600">{selectedRequest.createdBy.email}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Target Departments */}
-              {selectedRequest.targetDepartments && selectedRequest.targetDepartments.length > 0 && (
-                <div>
-                  <Label className="text-sm font-medium text-slate-600">Target Departments</Label>
-                  <div className="mt-2 space-y-2">
-                    {selectedRequest.targetDepartments.map((dept, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <p className="font-medium text-slate-800">{dept.name}</p>
-                          <p className="text-sm text-slate-600">{dept.description}</p>
-                        </div>
-                        <Badge variant="outline">{dept.name}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Assigned Directors */}
               {selectedRequest.assignedDirectors && selectedRequest.assignedDirectors.length > 0 && (
@@ -686,32 +1007,14 @@ export default function RequestsPage() {
                   <Label className="text-sm font-medium text-slate-600">Assigned Directors</Label>
                   <div className="mt-2 space-y-2">
                     {selectedRequest.assignedDirectors.map((assignment, index) => (
-                      <div key={index} className="p-3 border rounded-lg">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                              <User className="w-4 h-4 text-blue-600" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-slate-800">
-                                {assignment.director.firstName} {assignment.director.lastName}
-                              </p>
-                              <p className="text-sm text-slate-600">{assignment.director.email}</p>
-                            </div>
-                          </div>
-                          <Badge className={getStatusColor(assignment.status)}>{assignment.status}</Badge>
+                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="text-sm font-medium text-slate-800">
+                            {assignment.director.firstName} {assignment.director.lastName}
+                          </p>
+                          <p className="text-xs text-slate-500">{assignment.director.email}</p>
                         </div>
-                        {assignment.actionComment && (
-                          <div className="mt-2 p-2 bg-slate-50 rounded text-sm">
-                            <p className="text-slate-700">{assignment.actionComment}</p>
-                            {assignment.actionDate && (
-                              <p className="text-xs text-slate-500 mt-1">
-                                {formatDateTime(assignment.actionDate).date} at{" "}
-                                {formatDateTime(assignment.actionDate).time}
-                              </p>
-                            )}
-                          </div>
-                        )}
+                        <Badge className={getStatusColor(assignment.status)}>{assignment.status}</Badge>
                       </div>
                     ))}
                   </div>
@@ -722,130 +1025,22 @@ export default function RequestsPage() {
               <div>
                 <Label className="text-sm font-medium text-slate-600">Description</Label>
                 <div className="mt-2 p-4 bg-slate-50 rounded-lg">
-                  <p className="text-slate-800 whitespace-pre-wrap">{selectedRequest.description}</p>
+                  <p className="text-slate-800">{selectedRequest.description}</p>
                 </div>
               </div>
 
-              {/* Signature Information */}
-              {(selectedRequest.requiresSignature || selectedRequest.signatureProvided) && (
-                <div className="p-4 border rounded-lg bg-blue-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <Label className="text-sm font-medium text-slate-700">Signature Information</Label>
-                    <div className="flex items-center space-x-2">
-                      {selectedRequest.signatureProvided ? (
-                        <Badge className="bg-green-100 text-green-800">
-                          <CheckCircle className="w-3 h-3 mr-1" />
-                          Signature Provided
-                        </Badge>
-                      ) : selectedRequest.requiresSignature ? (
-                        <Badge className="bg-orange-100 text-orange-800">
-                          <Clock className="w-3 h-3 mr-1" />
-                          Signature Required
-                        </Badge>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {selectedRequest.signatureProvided && selectedRequest.signatureData && (
-                    <div className="mt-3 p-3 bg-white rounded-lg border">
-                      <Label className="text-xs text-slate-600 mb-2 block">Digital Signature</Label>
-                      <img
-                        src={selectedRequest.signatureData || "/placeholder.svg"}
-                        alt="Digital signature"
-                        className="max-h-20 max-w-full object-contain border rounded"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Comments & Signatures */}
-              {selectedRequest.comments && selectedRequest.comments.length > 0 && (
+              {/* Action Comment */}
+              {selectedRequest.actionComment && (
                 <div>
-                  <Label className="text-sm font-medium text-slate-600">Comments & Activity</Label>
-                  <div className="mt-2 space-y-3">
-                    {selectedRequest.comments.map((comment, index) => (
-                      <div
-                        key={index}
-                        className={`p-3 rounded-lg border ${comment.isSignature ? "bg-green-50 border-green-200" : "bg-slate-50"}`}
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center space-x-2">
-                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-                              {comment.isSignature ? (
-                                <PenTool className="w-3 h-3 text-blue-600" />
-                              ) : (
-                                <MessageSquare className="w-3 h-3 text-blue-600" />
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-slate-800">
-                                {comment.author.firstName} {comment.author.lastName}
-                              </p>
-                              <p className="text-xs text-slate-600">{comment.author.email}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs text-slate-500">{formatDateTime(comment.createdAt).date}</p>
-                            <p className="text-xs text-slate-500">{formatDateTime(comment.createdAt).time}</p>
-                          </div>
-                        </div>
-
-                        <p className="text-sm text-slate-700 mb-2">{comment.text}</p>
-
-                        {comment.isSignature && comment.signatureData && (
-                          <div className="mt-2 p-2 bg-white rounded border">
-                            <Label className="text-xs text-slate-600 mb-1 block">Digital Signature</Label>
-                            <img
-                              src={comment.signatureData || "/placeholder.svg"}
-                              alt="Comment signature"
-                              className="max-h-16 max-w-full object-contain"
-                            />
-                          </div>
-                        )}
-
-                        {comment.isSignature && (
-                          <div className="mt-2 flex items-center space-x-1 text-green-700">
-                            <Shield className="w-3 h-3" />
-                            <span className="text-xs font-medium">Verified Digital Signature</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Final Action Details */}
-              {selectedRequest.actionBy && (
-                <div className="p-4 border rounded-lg bg-green-50">
-                  <Label className="text-sm font-medium text-slate-600 mb-3 block">Final Action Details</Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-xs text-slate-600">Action Taken By</Label>
-                      <p className="text-sm font-medium text-slate-800">
-                        {selectedRequest.actionBy.firstName} {selectedRequest.actionBy.lastName}
+                  <Label className="text-sm font-medium text-slate-600">Response/Feedback</Label>
+                  <div className="mt-2 p-4 bg-blue-50 rounded-lg">
+                    <p className="text-slate-800">{selectedRequest.actionComment}</p>
+                    {selectedRequest.actionDate && (
+                      <p className="text-xs text-slate-500 mt-2">
+                        {new Date(selectedRequest.actionDate).toLocaleDateString()}
                       </p>
-                      <p className="text-xs text-slate-600">{selectedRequest.actionBy.email}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-slate-600">Action Date</Label>
-                      <p className="text-sm text-slate-800">
-                        {selectedRequest.actionDate && (
-                          <>
-                            {formatDateTime(selectedRequest.actionDate).date} at{" "}
-                            {formatDateTime(selectedRequest.actionDate).time}
-                          </>
-                        )}
-                      </p>
-                    </div>
+                    )}
                   </div>
-                  {selectedRequest.actionComment && (
-                    <div className="mt-3 p-2 bg-white rounded border">
-                      <Label className="text-xs text-slate-600">Final Comment</Label>
-                      <p className="text-sm text-slate-800 mt-1">{selectedRequest.actionComment}</p>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -872,6 +1067,13 @@ export default function RequestsPage() {
                   </div>
                 </div>
               )}
+
+              <div className="flex justify-end">
+                <Button onClick={() => openActionDialog(selectedRequest)} className="bg-orange-500 hover:bg-orange-600">
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Take Action
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>

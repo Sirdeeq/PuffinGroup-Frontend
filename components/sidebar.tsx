@@ -149,18 +149,18 @@ export default function Sidebar({ user }: SidebarProps) {
   ]
 
   const directorNavigation: NavItem[] = [
-    {
-      name: "Dashboard",
-      href: "/dashboard",
-      icon: LayoutDashboard,
-      key: "dashboard",
-    },
+    // {
+    //   name: "Dashboard",
+    //   href: "/dashboard",
+    //   icon: LayoutDashboard,
+    //   key: "dashboard",
+    // },
     {
       name: "Files",
       icon: FileText,
       key: "files",
       children: [
-        { name: "Review Files", href: "/dashboard/files/review", icon: Eye },
+        // { name: "Review Files", href: "/dashboard/files/review", icon: Eye },
         { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox, badge: "3" },
       ],
     },
@@ -170,7 +170,7 @@ export default function Sidebar({ user }: SidebarProps) {
       key: "requests",
       children: [
         { name: "Review Requests", href: "/dashboard/requests/review", icon: Eye },
-        { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox, badge: "5" },
+        // { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox, badge: "5" },
       ],
     },
     {
@@ -198,12 +198,12 @@ export default function Sidebar({ user }: SidebarProps) {
   ]
 
   const departmentNavigation: NavItem[] = [
-    {
-      name: "Dashboard",
-      href: "/dashboard",
-      icon: LayoutDashboard,
-      key: "dashboard",
-    },
+    // {
+    //   name: "Dashboard",
+    //   href: "/dashboard",
+    //   icon: LayoutDashboard,
+    //   key: "dashboard",
+    // },
     {
       name: "Files",
       icon: FileText,

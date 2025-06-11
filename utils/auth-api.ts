@@ -1,10 +1,11 @@
 "use client"
 
 import axios from "axios"
+import { API_BASE_URL } from "./api"
 
 // Create an axios instance with default config
 const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000",
+  baseURL:API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },

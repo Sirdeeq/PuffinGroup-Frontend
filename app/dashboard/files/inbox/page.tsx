@@ -4,13 +4,25 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
 import { api } from "@/utils/api"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   Inbox,
@@ -30,9 +42,14 @@ import {
   MoreHorizontal,
   Grid3X3,
   List,
-  Share,
+  Building2,
+  AlertTriangle,
+  Settings,
+  Shield,
+  Clock,
+  MessageSquare,
 } from "lucide-react"
-import { redirect } from "next/navigation"
+import { redirect, useRouter } from "next/navigation"
 
 interface FileData {
   _id: string
@@ -65,11 +82,17 @@ interface FileData {
     permission: string
     sharedAt: string
   }>
+  signatures?: Array<{
+    user: string
+    signatureData: string
+    signedAt: string
+  }>
 }
 
 export default function InboxPageEnhanced() {
   const { toast } = useToast()
   const authContext = useAuth()
+  const router = useRouter()
 
   const [files, setFiles] = useState<FileData[]>([])
   const [filteredFiles, setFilteredFiles] = useState<FileData[]>([])
@@ -80,18 +103,35 @@ export default function InboxPageEnhanced() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [viewMode, setViewMode] = useState<"card" | "table">("card")
+  const [userSignature, setUserSignature] = useState<any>(null)
 
   // Modal states
   const [showViewModal, setShowViewModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showReviewModal, setShowReviewModal] = useState(false)
-  const [showForwardModal, setShowForwardModal] = useState(false)
+  const [showSignatureDialog, setShowSignatureDialog] = useState(false)
 
   // Redirect if not authenticated
   if (!authContext.isAuthenticated) {
     redirect("/login")
   }
+
+  // Fetch user signature on component mount
+  useEffect(() => {
+    const fetchUserSignature = async () => {
+      try {
+        const savedSignature = localStorage.getItem("signatureData")
+        if (savedSignature) {
+          setUserSignature(JSON.parse(savedSignature))
+        }
+      } catch (error) {
+        console.error("Error fetching user signature:", error)
+      }
+    }
+
+    fetchUserSignature()
+  }, [authContext])
 
   // Fetch inbox files (files shared with user's department)
   useEffect(() => {
@@ -133,6 +173,44 @@ export default function InboxPageEnhanced() {
 
   const handleFileAction = async (action: "approve" | "reject" | "sendback") => {
     if (!selectedFile) return
+
+    // Check if approval requires signature
+    if (action === "approve" && selectedFile.requiresSignature) {
+      if (!userSignature || !userSignature.hasSignature) {
+        setShowSignatureDialog(true)
+        return
+      }
+
+      // Check if user already signed this file
+      const alreadySigned = selectedFile.signatures?.some((sig) => sig.user === authContext.user?.id)
+
+      if (!alreadySigned) {
+        // Add signature first
+        try {
+          const signatureResponse = await api.addSignature(
+            selectedFile._id,
+            { signatureData: userSignature.signatureUrl || userSignature.signatureText },
+            authContext,
+          )
+
+          if (!signatureResponse.success) {
+            toast({
+              title: "Signature failed",
+              description: "Failed to add signature to file",
+              variant: "destructive",
+            })
+            return
+          }
+        } catch (error) {
+          toast({
+            title: "Signature failed",
+            description: "Failed to add signature to file",
+            variant: "destructive",
+          })
+          return
+        }
+      }
+    }
 
     if (!actionComment.trim() && action !== "approve") {
       toast({
@@ -210,94 +288,81 @@ export default function InboxPageEnhanced() {
     }
   }
 
-  const handleForwardFile = async () => {
-    if (!selectedFile) return
-
-    try {
-      setIsProcessing(true)
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      setShowForwardModal(false)
-      setSelectedFile(null)
-      toast({
-        title: "Success",
-        description: "File forwarded successfully",
-      })
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to forward file",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return "0 Bytes"
     const k = 1024
     const sizes = ["Bytes", "KB", "MB", "GB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
-  }
+}
 
-  const getActionIcon = (action: string) => {
-    switch (action) {
-      case "approve":
-        return CheckCircle
-      case "reject":
-        return XCircle
-      case "sendback":
-        return RotateCcw
-      default:
-        return CheckCircle
+// Format signature data
+const formatSignature = (signature: any) => {
+  if (!signature) return null
+  
+  // Try to parse signature data as JSON
+  try {
+    const sigData = JSON.parse(signature.signatureData)
+    
+    // If it's an object with imageUrl, return it as is
+    if (sigData && sigData.imageUrl) {
+      return sigData
     }
+    
+    // If it's just a string in JSON, return it
+    if (typeof sigData === 'string') {
+      return sigData
+    }
+    
+    // If it's an object with text content, return that
+    if (sigData && sigData.text) {
+      return sigData.text
+    }
+    
+    return sigData
+  } catch (error) {
+    // If parsing fails, return the raw data
+    return signature.signatureData
   }
+}
 
-  const getActionColor = (action: string) => {
-    switch (action) {
-      case "approve":
-        return "bg-green-500 hover:bg-green-600"
-      case "reject":
-        return "bg-red-500 hover:bg-red-600"
-      case "sendback":
-        return "bg-orange-500 hover:bg-orange-600"
-      default:
-        return "bg-gray-500 hover:bg-gray-600"
-    }
-  }
+// const getPriorityColor = (priority: string) => {
+//     if (bytes === 0) return "0 Bytes"
+//     const k = 1024
+//     const sizes = ["Bytes", "KB", "MB", "GB"]
+//     const i = Math.floor(Math.log(bytes) / Math.log(k))
+//     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+//   }
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "urgent":
-        return "bg-red-100 text-red-800"
+        return "bg-red-100 text-red-800 border-red-200"
       case "high":
-        return "bg-orange-100 text-orange-800"
+        return "bg-orange-100 text-orange-800 border-orange-200"
       case "medium":
-        return "bg-blue-100 text-blue-800"
+        return "bg-blue-100 text-blue-800 border-blue-200"
       case "low":
-        return "bg-gray-100 text-gray-800"
+        return "bg-gray-100 text-gray-800 border-gray-200"
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case "active":
-        return "bg-blue-100 text-blue-800"
+        return "bg-blue-100 text-blue-800 border-blue-200"
       case "pending":
-        return "bg-orange-100 text-orange-800"
+        return "bg-orange-100 text-orange-800 border-orange-200"
       case "sent_back":
-        return "bg-red-100 text-red-800"
+        return "bg-red-100 text-red-800 border-red-200"
       case "approved":
-        return "bg-green-100 text-green-800"
+        return "bg-green-100 text-green-800 border-green-200"
       case "rejected":
-        return "bg-gray-100 text-gray-800"
+        return "bg-gray-100 text-gray-800 border-gray-200"
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
 
@@ -321,9 +386,10 @@ export default function InboxPageEnhanced() {
     setShowReviewModal(true)
   }
 
-  const openForwardModal = (file: FileData) => {
-    setSelectedFile(file)
-    setShowForwardModal(true)
+  const handleGoToSettings = () => {
+    setShowSignatureDialog(false)
+    setShowReviewModal(false)
+    router.push("/settings/signature")
   }
 
   if (loading) {
@@ -389,7 +455,7 @@ export default function InboxPageEnhanced() {
           {viewMode === "card" && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredFiles.map((file) => (
-                <Card key={file._id} className="hover:shadow-lg transition-shadow">
+                <Card key={file._id} className="hover:shadow-lg transition-shadow border-l-4 border-l-orange-500">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center space-x-3">
@@ -419,10 +485,6 @@ export default function InboxPageEnhanced() {
                             <CheckCircle className="w-4 h-4 mr-2" />
                             Review & Approve
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openForwardModal(file)}>
-                            <Share className="w-4 h-4 mr-2" />
-                            Forward
-                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openDeleteDialog(file)} className="text-red-600">
                             <Trash2 className="w-4 h-4 mr-2" />
                             Delete
@@ -451,10 +513,43 @@ export default function InboxPageEnhanced() {
                       <Badge className={`text-xs ${getPriorityColor(file.priority)}`}>{file.priority}</Badge>
                       <Badge className={`text-xs ${getStatusColor(file.status)}`}>{file.status}</Badge>
                       {file.requiresSignature && (
-                        <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">
-                          <PenTool className="w-2 h-2 mr-1" />
-                          Signature
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">
+                            <PenTool className="w-2 h-2 mr-1" />
+                            {file.signatures && file.signatures.length > 0 
+                              ? `Signed (${file.signatures.length})`
+                              : 'Signature Required'}
+                          </Badge>
+                          
+                          {/* Signature Status Indicator */}
+                          {file.signatures && file.signatures.length > 0 && (
+                            <div className="flex items-center gap-1">
+                              {file.signatures.map((sig: any) => {
+                                const user = file.sharedWith?.find((share: any) => share.user === sig.user)
+                                if (!user) return null
+
+                                // Get signature type based on role
+                                const signatureType = user.role === 'department' ? 'dept' : 'admin'
+                                
+                                // Get status based on signature
+                                const status = sig.user === authContext.user?.id ? 'current' : 'other'
+                                
+                                return (
+                                  <div 
+                                    key={sig._id} 
+                                    className={`w-2 h-2 rounded-full ${
+                                      status === 'current' 
+                                        ? 'bg-blue-500' 
+                                        : signatureType === 'dept' 
+                                        ? 'bg-green-500' 
+                                        : 'bg-purple-500'
+                                    }`}
+                                  />
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -548,9 +643,6 @@ export default function InboxPageEnhanced() {
                             <Button variant="ghost" size="sm" onClick={() => openReviewModal(file)}>
                               <CheckCircle className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => openForwardModal(file)}>
-                              <Share className="w-4 h-4" />
-                            </Button>
                             <Button variant="ghost" size="sm" asChild>
                               <a href={file.file.url} target="_blank" rel="noopener noreferrer">
                                 <Download className="w-4 h-4" />
@@ -575,6 +667,400 @@ export default function InboxPageEnhanced() {
           )}
         </>
       )}
+
+      {/* Enhanced Review File Modal */}
+      <Dialog open={showReviewModal} onOpenChange={setShowReviewModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="border-b pb-4">
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <Shield className="w-6 h-6 text-blue-600" />
+              File Review & Approval
+            </DialogTitle>
+            <DialogDescription className="text-base">
+              Review the file details and take appropriate action
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedFile && (
+            <div className="space-y-6 py-4">
+              {/* File Information Card */}
+              <Card className="border-l-4 border-l-blue-500">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-blue-600" />
+                    {selectedFile.title}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-sm font-medium text-muted-foreground">Description</Label>
+                        <p className="text-sm mt-1 p-3 bg-slate-50 rounded-lg">{selectedFile.description}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Category</Label>
+                          <Badge variant="outline" className="mt-1 block w-fit">
+                            {selectedFile.category}
+                          </Badge>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Priority</Label>
+                          <Badge className={`mt-1 block w-fit ${getPriorityColor(selectedFile.priority)}`}>
+                            {selectedFile.priority}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-sm font-medium text-muted-foreground">Submitted By</Label>
+                        <div className="mt-1 p-3 bg-slate-50 rounded-lg">
+                          <p className="font-medium">
+                            {selectedFile.createdBy.firstName} {selectedFile.createdBy.lastName}
+                          </p>
+                          <p className="text-sm text-muted-foreground">{selectedFile.createdBy.email}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+                          <Badge className={`mt-1 block w-fit ${getStatusColor(selectedFile.status)}`}>
+                            {selectedFile.status}
+                          </Badge>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Created</Label>
+                          <p className="text-sm mt-1 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {new Date(selectedFile.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Departments */}
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Departments</Label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {selectedFile.departments.map((dept) => (
+                        <Badge key={dept._id} variant="outline" className="text-xs">
+                          <Building2 className="w-3 h-3 mr-1" />
+                          {dept.name} ({dept.code})
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* File Attachment */}
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">File Attachment</Label>
+                    <div className="flex items-center justify-between p-3 border rounded-lg mt-1 bg-white">
+                      <div className="flex items-center space-x-2">
+                        <FileText className="w-4 h-4 text-blue-600" />
+                        <span className="text-sm font-medium">{selectedFile.file.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          ({formatFileSize(selectedFile.file.size)})
+                        </span>
+                      </div>
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={selectedFile.file.url} target="_blank" rel="noopener noreferrer">
+                          <Download className="w-4 h-4 mr-2" />
+                          Download
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Signature Requirements */}
+                  {selectedFile.requiresSignature && (
+                    <div className="space-y-4">
+                      {/* Signature Requirement Info */}
+                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <PenTool className="w-4 h-4 text-blue-600" />
+                          <Label className="text-sm font-medium text-blue-800">Digital Signature Required</Label>
+                        </div>
+                        <p className="text-sm text-blue-700">
+                          This file requires a digital signature for approval. Your signature will be added automatically
+                          when you approve.
+                        </p>
+                      </div>
+
+                      {/* Department Signatures */}
+                      {selectedFile.signatures && selectedFile.signatures.length > 0 && (
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Department Signatures</Label>
+                          <div className="space-y-2 mt-2">
+                            {selectedFile.signatures.map((sig: any) => {
+                              const signature = formatSignature(sig)
+                              const user = selectedFile.sharedWith?.find((share: any) => share.user === sig.user)
+                              
+                              if (!user || user.role !== 'department') return null
+
+                              return (
+                                <div key={sig._id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
+                                  <div className="flex items-center space-x-2">
+                                    <User className="w-4 h-4 text-blue-600" />
+                                    <div>
+                                      <p className="font-medium">
+                                        {user.user.firstName} {user.user.lastName}
+                                      </p>
+                                      <p className="text-sm text-muted-foreground">{user.user.email}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-sm text-muted-foreground">
+                                      Signed on: {new Date(sig.signedAt).toLocaleString()}
+                                    </p>
+                                    {signature && (
+                                      <div className="mt-1">
+                                        <p className="text-sm text-blue-600">Signature Preview:</p>
+                                        <div className="mt-1 p-2 bg-white border rounded">
+                                          {typeof signature === 'string' ? (
+                                            <p className="text-sm">{signature}</p>
+                                          ) : (
+                                            <img 
+                                              src={signature.imageUrl} 
+                                              alt="Signature"
+                                              className="w-24 h-12 object-contain"
+                                            />
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Admin Signatures */}
+                      {selectedFile.signatures && selectedFile.signatures.length > 0 && (
+                        <div>
+                          <Label className="text-sm font-medium text-muted-foreground">Admin Signatures</Label>
+                          <div className="space-y-2 mt-2">
+                            {selectedFile.signatures.map((sig: any) => {
+                              const signature = formatSignature(sig)
+                              const user = selectedFile.sharedWith?.find((share: any) => share.user === sig.user)
+                              
+                              if (!user || user.role !== 'admin') return null
+
+                              return (
+                                <div key={sig._id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
+                                  <div className="flex items-center space-x-2">
+                                    <User className="w-4 h-4 text-blue-600" />
+                                    <div>
+                                      <p className="font-medium">
+                                        {user.user.firstName} {user.user.lastName}
+                                      </p>
+                                      <p className="text-sm text-muted-foreground">{user.user.email}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-sm text-muted-foreground">
+                                      Signed on: {new Date(sig.signedAt).toLocaleString()}
+                                    </p>
+                                    {signature && (
+                                      <div className="mt-1">
+                                        <p className="text-sm text-blue-600">Signature Preview:</p>
+                                        <div className="mt-1 p-2 bg-white border rounded">
+                                          {typeof signature === 'string' ? (
+                                            <p className="text-sm">{signature}</p>
+                                          ) : (
+                                            <img 
+                                              src={signature.imageUrl} 
+                                              alt="Signature"
+                                              className="w-24 h-12 object-contain"
+                                            />
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Review Actions Card */}
+              <Card className="border-l-4 border-l-green-500">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-green-600" />
+                    Review Actions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Approval Status */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium text-muted-foreground">Approval Status</Label>
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-green-100 text-green-800 border-green-200">
+                        {selectedFile?.approvalStatus || 'pending'}
+                      </Badge>
+                      <p className="text-sm text-muted-foreground">
+                        Last updated: {new Date(selectedFile?.updatedAt || selectedFile?.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Department Approvals */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium text-muted-foreground">Department Approvals</Label>
+                    <div className="space-y-2">
+                      {selectedFile?.departments?.map((dept) => (
+                        <div key={dept._id} className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            <Building2 className="w-3 h-3 mr-1" />
+                            {dept.name} ({dept.code})
+                          </Badge>
+                          <p className="text-sm text-muted-foreground">
+                            Status: {selectedFile?.status || 'pending'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Director Approvals */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium text-muted-foreground">Director Approvals</Label>
+                    <div className="space-y-2">
+                      {selectedFile?.sharedWith?.filter(share => share.user.role === 'director').map((share) => (
+                        <div key={share._id} className="flex items-center gap-2">
+                          <div className="flex items-center space-x-2">
+                            <User className="w-4 h-4 text-blue-600" />
+                            <div>
+                              <p className="font-medium">
+                                {share.user.firstName} {share.user.lastName}
+                              </p>
+                              <p className="text-sm text-muted-foreground">{share.user.email}</p>
+                            </div>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Status: {selectedFile?.status || 'pending'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Comment Section */}
+                  <div className="space-y-2">
+                    <Label htmlFor="action-comment" className="text-sm font-medium">
+                      Review Comment
+                    </Label>
+                    <Textarea
+                      id="action-comment"
+                      placeholder="Add your review comments here..."
+                      value={actionComment}
+                      onChange={(e) => setActionComment(e.target.value)}
+                      rows={3}
+                      className="resize-none"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Comments are required for reject and send back actions
+                    </p>
+                  </div>
+
+                  {/* Signature Requirement Toggle */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg bg-slate-50">
+                    <div className="space-y-1">
+                      <Label htmlFor="require-signature" className="text-sm font-medium">
+                        Require Digital Signature
+                      </Label>
+                      <p className="text-xs text-muted-foreground">Require signature before final approval</p>
+                    </div>
+                    <Switch id="require-signature" checked={requireSignature} onCheckedChange={setRequireSignature} />
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center justify-end space-x-3 pt-4 border-t">
+                    <Button variant="outline" onClick={() => setShowReviewModal(false)} disabled={isProcessing}>
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => handleFileAction("sendback")}
+                      disabled={isProcessing}
+                      variant="outline"
+                      className="border-orange-200 text-orange-700 hover:bg-orange-50"
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <RotateCcw className="w-4 h-4 mr-2" />
+                      )}
+                      Send Back
+                    </Button>
+                    <Button
+                      onClick={() => handleFileAction("reject")}
+                      disabled={isProcessing}
+                      variant="outline"
+                      className="border-red-200 text-red-700 hover:bg-red-50"
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <XCircle className="w-4 h-4 mr-2" />
+                      )}
+                      Reject
+                    </Button>
+                    <Button
+                      onClick={() => handleFileAction("approve")}
+                      disabled={isProcessing}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                      )}
+                      Approve
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Signature Required Dialog */}
+      <AlertDialog open={showSignatureDialog} onOpenChange={setShowSignatureDialog}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-500" />
+              Signature Required
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>This file requires a digital signature for approval.</p>
+              <p className="text-sm">
+                You need to set up your digital signature in settings before you can approve files that require
+                signatures.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleGoToSettings} className="bg-blue-600 hover:bg-blue-700">
+              <Settings className="w-4 h-4 mr-2" />
+              Go to Settings
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* View File Modal */}
       <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
@@ -619,25 +1105,35 @@ export default function InboxPageEnhanced() {
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">Created Date</Label>
-                  <p className="text-sm">{new Date(selectedFile.createdAt).toLocaleDateString()}</p>\
+                  <p className="text-sm">{new Date(selectedFile.createdAt).toLocaleString()}</p>
                 </div>
               </div>
               <div>
-                <Label className="text-sm font-medium text-muted-foreground">File Name</Label>
-                <p className="text-sm">{selectedFile.file.name}</p>
+                <Label className="text-sm font-medium text-muted-foreground">Departments</Label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {selectedFile.departments.map((dept) => (
+                    <Badge key={dept._id} variant="outline" className="text-xs">
+                      <Building2 className="w-3 h-3 mr-1" />
+                      {dept.name} ({dept.code})
+                    </Badge>
+                  ))}
+                </div>
               </div>
               <div>
-                <Label className="text-sm font-medium text-muted-foreground">File Size</Label>
-                <p className="text-sm">{formatFileSize(selectedFile.file.size)}</p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Download File</Label>
-                <Button variant="outline" asChild>
-                  <a href={selectedFile.file.url} target="_blank" rel="noopener noreferrer">
-                    Download
-                    <Download className="w-4 h-4 ml-2" />
-                  </a>
-                </Button>
+                <Label className="text-sm font-medium text-muted-foreground">File Attachment</Label>
+                <div className="flex items-center justify-between p-3 border rounded-lg mt-1">
+                  <div className="flex items-center space-x-2">
+                    <FileText className="w-4 h-4" />
+                    <span className="text-sm">{selectedFile.file.name}</span>
+                    <span className="text-xs text-muted-foreground">({formatFileSize(selectedFile.file.size)})</span>
+                  </div>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={selectedFile.file.url} target="_blank" rel="noopener noreferrer">
+                      <Download className="w-4 h-4 mr-2" />
+                      Download
+                    </a>
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -646,173 +1142,53 @@ export default function InboxPageEnhanced() {
 
       {/* Edit File Modal */}
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Edit File: {selectedFile?.title}</DialogTitle>
-            <DialogDescription>Make changes to this file</DialogDescription>
+            <DialogDescription>Update file information</DialogDescription>
           </DialogHeader>
-          <div>
-            <p>This feature is under development.</p>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Review File Modal */}
-      <Dialog open={showReviewModal} onOpenChange={setShowReviewModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Review File: {selectedFile?.title}</DialogTitle>
-            <DialogDescription>Approve, reject, or send back this file</DialogDescription>
-          </DialogHeader>
-
           <div className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="comment">Comment</Label>
-              <Input
-                id="comment"
-                placeholder="Add a comment"
-                value={actionComment}
-                onChange={(e) => setActionComment(e.target.value)}
-              />
-            </div>
-
-            {selectedFile?.requiresSignature && (
-              <div className="flex items-center space-x-2">
-                <Input
-                  id="signature-required"
-                  type="checkbox"
-                  checked={requireSignature}
-                  onChange={(e) => setRequireSignature(e.target.checked)}
-                />
-                <Label htmlFor="signature-required">Require Signature</Label>
-              </div>
-            )}
-
+            <p className="text-sm text-muted-foreground">
+              Edit functionality would be implemented here based on your file editing requirements.
+            </p>
             <div className="flex justify-end space-x-2">
-              <Button type="button" variant="secondary" onClick={() => setShowReviewModal(false)}>
+              <Button variant="outline" onClick={() => setShowEditModal(false)}>
                 Cancel
               </Button>
-              <Button
-                type="button"
-                className={getActionColor("sendback")}
-                onClick={() => handleFileAction("sendback")}
-                disabled={isProcessing}
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Please wait
-                  </>
-                ) : (
-                  <>
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Send Back
-                  </>
-                )}
-              </Button>
-              <Button
-                type="button"
-                className={getActionColor("reject")}
-                onClick={() => handleFileAction("reject")}
-                disabled={isProcessing}
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Please wait
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Reject
-                  </>
-                )}
-              </Button>
-              <Button
-                type="button"
-                className={getActionColor("approve")}
-                onClick={() => handleFileAction("approve")}
-                disabled={isProcessing}
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Please wait
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Approve
-                  </>
-                )}
-              </Button>
+              <Button onClick={() => setShowEditModal(false)}>Save Changes</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Forward File Modal */}
-      <Dialog open={showForwardModal} onOpenChange={setShowForwardModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Forward File: {selectedFile?.title}</DialogTitle>
-            <DialogDescription>Forward this file to another department</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="department">Department</Label>
-              <Input id="department" placeholder="Select a department" disabled />
-            </div>
-
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="secondary" onClick={() => setShowForwardModal(false)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={() => handleForwardFile()} disabled={isProcessing}>
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Please wait
-                  </>
-                ) : (
-                  <>
-                    <Share className="mr-2 h-4 w-4" />
-                    Forward
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete File Dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete File: {selectedFile?.title}</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this file? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end space-x-2">
-            <Button type="button" variant="secondary" onClick={() => setShowDeleteDialog(false)}>
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteFile} disabled={isProcessing}>
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the file "{selectedFile?.title}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isProcessing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteFile}
+              disabled={isProcessing}
+              className="bg-red-600 hover:bg-red-700"
+            >
               {isProcessing ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Please wait
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
                 </>
               ) : (
-                "Delete"
+                "Delete File"
               )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

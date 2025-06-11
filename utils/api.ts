@@ -17,7 +17,8 @@ interface User {
 }
 
 // Define API endpoints
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend.onrender.com"
+// export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
 // Create an axios instance with default config
 const apiClient = axios.create({
@@ -270,6 +271,14 @@ export const api = {
   getUsersByRole: async (role: string, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get(`/api/users/role/${role}`, undefined, authContext)
   },
+  // Check if user has signature
+  getUserSignature: async (authContext: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().get("/api/auth/signature", undefined, authContext)
+  },
+
+  updateUserSignature: async (data: any, authContext: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().put(`/api/auth/signature`, data, authContext)
+  },
 
   updateUser: async (id: string, data: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().put(`/api/users/${id}`, data, authContext)
@@ -364,6 +373,7 @@ export const api = {
   uploadNewVersion: async (id: string, formData: FormData, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().uploadFormData(`/api/files/${id}/version`, formData, authContext)
   },
+  // Add signature to file
   addSignature: async (id: string, signatureData: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().post(`/api/files/${id}/signature`, signatureData, authContext)
   },
@@ -393,6 +403,9 @@ export const api = {
   },
   getRequest: async (id: string, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get(`/api/requests/${id}`, undefined, authContext)
+  },
+  getReviewedRequests: async (authContext: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().get("/api/requests/reviewed", undefined, authContext)
   },
   updateRequest: async (id: string, data: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().put(`/api/requests/${id}`, data, authContext)

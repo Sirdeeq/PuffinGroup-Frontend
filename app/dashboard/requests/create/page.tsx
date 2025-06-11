@@ -56,8 +56,8 @@ export default function CreateRequestPage() {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    targetDepartment: "",
-    assignedDirector: "",
+    targetDepartments: "",
+    assignedDirectors: "",
     priority: "medium",
     category: "approval",
   })
@@ -98,11 +98,11 @@ export default function CreateRequestPage() {
   // Fetch directors when department changes
   useEffect(() => {
     const fetchDirectors = async () => {
-      if (!formData.targetDepartment) return
+      if (!formData.targetDepartments) return
 
       try {
         setLoadingDirectors(true)
-        const response = await api.getDirectorsByDepartment(formData.targetDepartment, authContext)
+        const response = await api.getDirectorsByDepartment(formData.targetDepartments, authContext)
 
         if (response.success && response.data) {
           const { currentDirector, previousDirectors } = response.data
@@ -124,10 +124,10 @@ export default function CreateRequestPage() {
       }
     }
 
-    if (formData.targetDepartment) {
+    if (formData.targetDepartments) {
       fetchDirectors()
     }
-  }, [formData.targetDepartment, authContext, toast])
+  }, [formData.targetDepartments, authContext, toast])
 
   const priorities = [
     { value: "low", label: "Low", color: "text-blue-600" },
@@ -152,10 +152,10 @@ export default function CreateRequestPage() {
     }))
 
     // Reset director when department changes
-    if (field === "targetDepartment") {
+    if (field === "targetDepartments") {
       setFormData((prev) => ({
         ...prev,
-        assignedDirector: "",
+        assignedDirectors: "",
       }))
     }
   }
@@ -217,7 +217,7 @@ export default function CreateRequestPage() {
       return
     }
 
-    if (!formData.targetDepartment) {
+    if (!formData.targetDepartments) {
       toast({
         title: "Department required",
         description: "Please select a target department",
@@ -262,7 +262,7 @@ export default function CreateRequestPage() {
         }
 
         // Redirect to requests page
-        router.push("/requests")
+        router.push("/dashboard/requests")
       } else {
         throw new Error(response.error || "Failed to submit request")
       }
@@ -352,8 +352,8 @@ export default function CreateRequestPage() {
                 <div className="space-y-2">
                   <Label htmlFor="department">Target Department *</Label>
                   <Select
-                    value={formData.targetDepartment}
-                    onValueChange={(value) => handleInputChange("targetDepartment", value)}
+                    value={formData.targetDepartments}
+                    onValueChange={(value) => handleInputChange("targetDepartments", value)}
                     disabled={loadingDepartments}
                   >
                     <SelectTrigger>
@@ -372,16 +372,16 @@ export default function CreateRequestPage() {
                 <div className="space-y-2">
                   <Label htmlFor="director">Assigned Director (Optional)</Label>
                   <Select
-                    value={formData.assignedDirector}
-                    onValueChange={(value) => handleInputChange("assignedDirector", value)}
-                    disabled={!formData.targetDepartment || loadingDirectors}
+                    value={formData.assignedDirectors}
+                    onValueChange={(value) => handleInputChange("assignedDirectors", value)}
+                    disabled={!formData.targetDepartments || loadingDirectors}
                   >
                     <SelectTrigger>
                       <SelectValue
                         placeholder={
                           loadingDirectors
                             ? "Loading directors..."
-                            : !formData.targetDepartment
+                            : !formData.targetDepartments
                               ? "Select department first"
                               : "Select director"
                         }
@@ -395,7 +395,7 @@ export default function CreateRequestPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {!formData.targetDepartment && <p className="text-sm text-slate-500">Select a department first</p>}
+                  {!formData.targetDepartments && <p className="text-sm text-slate-500">Select a department first</p>}
                 </div>
               </div>
 
@@ -440,7 +440,7 @@ export default function CreateRequestPage() {
                     Choose Files
                   </Button>
                   <p className="text-sm text-slate-500 mt-2">
-                    Supported formats: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG (Max 10MB each)
+                    Supported formats: PDF, PNG, JPG (Max 10MB each)
                   </p>
                 </div>
 
@@ -518,19 +518,19 @@ export default function CreateRequestPage() {
                 <div>
                   <Label className="text-sm font-medium text-slate-600">Target Department</Label>
                   <p className="mt-1 text-slate-800">
-                    {formData.targetDepartment
-                      ? departments.find((d) => d._id === formData.targetDepartment)?.name || "Not selected"
+                    {formData.targetDepartments
+                      ? departments.find((d) => d._id === formData.targetDepartments)?.name || "Not selected"
                       : "Not selected"}
                   </p>
                 </div>
 
-                {formData.assignedDirector && (
+                {formData.assignedDirectors && (
                   <div>
                     <Label className="text-sm font-medium text-slate-600">Assigned Director</Label>
                     <p className="mt-1 text-slate-800">
-                      {directors.find((d) => d._id === formData.assignedDirector)
-                        ? `${directors.find((d) => d._id === formData.assignedDirector)?.firstName} ${
-                            directors.find((d) => d._id === formData.assignedDirector)?.lastName
+                      {directors.find((d) => d._id === formData.assignedDirectors)
+                        ? `${directors.find((d) => d._id === formData.assignedDirectors)?.firstName} ${
+                            directors.find((d) => d._id === formData.assignedDirectors)?.lastName
                           }`
                         : "Not selected"}
                     </p>
@@ -567,7 +567,7 @@ export default function CreateRequestPage() {
           {/* Submit Button */}
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !formData.title || !formData.description || !formData.targetDepartment}
+            disabled={isSubmitting || !formData.title || !formData.description || !formData.targetDepartments}
             className="w-full bg-orange-500 hover:bg-orange-600"
             size="lg"
           >
