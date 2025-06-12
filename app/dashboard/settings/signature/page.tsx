@@ -1,29 +1,47 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
-
-interface SignatureData {
-  enabled: boolean;
-  type: "draw" | "upload" | "text";
-  data: string;
-}
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
-import { Upload, Save, Download, RefreshCw, PenTool, Type, ImageIcon } from "lucide-react"
+import {
+  Upload,
+  Save,
+  Download,
+  RefreshCw,
+  PenTool,
+  Type,
+  ImageIcon,
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  Loader2,
+} from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { api } from "@/utils/api"
 
+interface SignatureResponse {
+  enabled: boolean
+  type: "draw" | "upload" | "text"
+  data: string
+  cloudinaryId?: string
+  updatedAt: string
+}
+
 export default function SignatureSettingsPage() {
   const { toast } = useToast()
+  const authContext = useAuth()
   const [userRole, setUserRole] = useState("")
   const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [signatureMethod, setSignatureMethod] = useState<"draw" | "upload" | "text">("draw")
@@ -31,71 +49,107 @@ export default function SignatureSettingsPage() {
     hasSignature: false,
     signatureUrl: "",
     signatureText: "",
+    enabled: false,
+    type: "draw" as "draw" | "upload" | "text",
+    cloudinaryId: "",
+    updatedAt: "",
   })
-  const { user: authUser, isAuthenticated } = useAuth()
 
+  // Fetch user signature on component mount
   useEffect(() => {
-    const role = localStorage.getItem("userRole") || ""
-    setUserRole(role)
-
-    // Load user signature status from API
-    const loadSignatureStatus = async () => {
+    const initializeComponent = async () => {
       try {
+        setLoading(true)
+        const role = localStorage.getItem("userRole") || ""
+        setUserRole(role)
+
+        // Load user data
+        const userResponse = await api.getUser(authContext)
+        if (userResponse.success && userResponse.data) {
+          setUser(userResponse.data)
+        }
+
+        // Load user signature status from API
         const signatureResponse = await api.getUserSignature(authContext)
-        if (signatureResponse.success && signatureResponse.data) {
-          const signature = signatureResponse.data as SignatureData
+
+        if (signatureResponse.success && signatureResponse.signature) {
+          const signature = signatureResponse.signature as SignatureResponse
+
           setSignatureData({
             hasSignature: signature.enabled,
-            signatureUrl: signature.type === 'draw' ? signature.data : '',
-            signatureText: signature.type === 'text' ? signature.data : ''
+            enabled: signature.enabled,
+            type: signature.type,
+            signatureUrl: signature.type === "draw" || signature.type === "upload" ? signature.data : "",
+            signatureText: signature.type === "text" ? signature.data : "",
+            cloudinaryId: signature.cloudinaryId || "",
+            updatedAt: signature.updatedAt || "",
           })
-          setSignatureMethod(signature.type as "draw" | "upload" | "text")
+
+          setSignatureMethod(signature.type)
+
+          // If there's a signature URL and it's a draw/upload type, load it on canvas
+          if (signature.enabled && (signature.type === "draw" || signature.type === "upload") && signature.data) {
+            setTimeout(() => {
+              loadSignatureOnCanvas(signature.data)
+            }, 100)
+          }
+        } else {
+          // No signature found, set default text to user's name
+          if (userResponse.success && userResponse.data) {
+            setSignatureData((prev) => ({
+              ...prev,
+              signatureText: `${userResponse.data.firstName || ""} ${userResponse.data.lastName || ""}`.trim(),
+            }))
+          }
         }
       } catch (error) {
         console.error("Error loading signature status:", error)
         toast({
           title: "Error",
           description: "Failed to load signature status. Please try again.",
-          variant: "destructive"
+          variant: "destructive",
         })
+      } finally {
+        setLoading(false)
       }
     }
 
-    // Load user data
-    api.getUser(authContext).then((response: { success: boolean; data?: User }) => {
-      if (response.success && response.data) {
-        setUser(response.data)
-        // Set default signature text to user's full name if no signature exists
-        if (!signatureData.signatureText) {
-          setSignatureData(prev => ({
-            ...prev,
-            signatureText: `${response.data.firstName || ''} ${response.data.lastName || ''}`
-          }))
-        }
-      }
-    })
+    if (authContext.isAuthenticated) {
+      initializeComponent()
+    }
+  }, [authContext, toast])
 
-    loadSignatureStatus()
-
-    // Initialize canvas
+  useEffect(() => {
+    // Initialize canvas when component mounts
     initCanvas()
+  }, [])
 
-    // If there's a saved signature URL, draw it on the canvas
-    if (signatureData.signatureUrl && signatureMethod === "draw") {
-      const img = new Image()
-      img.onload = () => {
-        const canvas = canvasRef.current
-        if (canvas) {
-          const ctx = canvas.getContext("2d")
-          if (ctx) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height)
-            ctx.drawImage(img, 0, 0)
-          }
+  const loadSignatureOnCanvas = (imageUrl: string) => {
+    const canvas = canvasRef.current
+    if (canvas && imageUrl) {
+      const ctx = canvas.getContext("2d")
+      if (ctx) {
+        const img = new Image()
+        img.crossOrigin = "anonymous"
+        img.onload = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height)
+          ctx.fillStyle = "#ffffff"
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+          // Scale image to fit canvas while maintaining aspect ratio
+          const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
+          const x = (canvas.width - img.width * scale) / 2
+          const y = (canvas.height - img.height * scale) / 2
+
+          ctx.drawImage(img, x, y, img.width * scale, img.height * scale)
         }
+        img.onerror = () => {
+          console.error("Failed to load signature image")
+        }
+        img.src = imageUrl
       }
-      img.src = signatureData.signatureUrl
     }
-  }, [signatureMethod, authUser])
+  }
 
   const getThemeColor = () => {
     switch (userRole) {
@@ -133,15 +187,12 @@ export default function SignatureSettingsPage() {
     if (ctx) {
       ctx.beginPath()
 
-      // Get coordinates based on event type
       let x, y
       if ("touches" in e) {
-        // Touch event
         const rect = canvas.getBoundingClientRect()
         x = e.touches[0].clientX - rect.left
         y = e.touches[0].clientY - rect.top
       } else {
-        // Mouse event
         x = e.nativeEvent.offsetX
         y = e.nativeEvent.offsetY
       }
@@ -158,15 +209,12 @@ export default function SignatureSettingsPage() {
 
     const ctx = canvas.getContext("2d")
     if (ctx) {
-      // Get coordinates based on event type
       let x, y
       if ("touches" in e) {
-        // Touch event
         const rect = canvas.getBoundingClientRect()
         x = e.touches[0].clientX - rect.left
         y = e.touches[0].clientY - rect.top
       } else {
-        // Mouse event
         x = e.nativeEvent.offsetX
         y = e.nativeEvent.offsetY
       }
@@ -198,17 +246,42 @@ export default function SignatureSettingsPage() {
         ctx.fillStyle = "#ffffff"
         ctx.fillRect(0, 0, canvas.width, canvas.height)
       }
+      setSignatureData((prev) => ({
+        ...prev,
+        signatureUrl: "",
+      }))
     }
   }
 
   const handleSignatureUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Please select an image smaller than 5MB",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        toast({
+          title: "Invalid file type",
+          description: "Please select a valid image file",
+          variant: "destructive",
+        })
+        return
+      }
+
       const reader = new FileReader()
       reader.onload = (e) => {
+        const result = e.target?.result as string
         setSignatureData((prev) => ({
           ...prev,
-          signatureUrl: e.target?.result as string,
+          signatureUrl: result,
           hasSignature: true,
         }))
       }
@@ -216,61 +289,71 @@ export default function SignatureSettingsPage() {
     }
   }
 
-  const authContext = useAuth()
-
   const handleSignatureSave = async () => {
     try {
-      // Save to localStorage first
-      localStorage.setItem("signatureData", JSON.stringify(signatureData))
+      setSaving(true)
 
-      let payload;
+      // Prepare payload based on signature method
+      const payload: any = {
+        enabled: signatureData.hasSignature,
+        type: signatureMethod,
+      }
 
       if (signatureMethod === "draw") {
         const canvas = canvasRef.current
         if (canvas) {
-          const dataUrl = canvas.toDataURL('image/png')
-          payload = {
-            enabled: signatureData.hasSignature,
-            type: 'draw',
-            data: dataUrl
-          }
+          const dataUrl = canvas.toDataURL("image/png")
+          payload.data = dataUrl
+          // Match the controller's expected field name
+          payload.signatureType = "draw"
+          payload.signatureData = dataUrl
+        } else {
+          throw new Error("No signature drawn")
         }
       } else if (signatureMethod === "upload" && signatureData.signatureUrl) {
-        // For uploaded signatures, use FormData with file
-        const formData = new FormData()
-        formData.append('enabled', signatureData.hasSignature.toString())
-        formData.append('type', 'upload')
-        formData.append('data', signatureData.signatureUrl)
-
-        payload = formData
+        payload.data = signatureData.signatureUrl
+        // Match the controller's expected field name
+        payload.signatureType = "image"
+        payload.signatureData = signatureData.signatureUrl
       } else if (signatureMethod === "text" && signatureData.signatureText) {
-        // For text signatures, send as JSON
-        payload = {
-          enabled: signatureData.hasSignature,
-          type: 'text',
-          data: signatureData.signatureText
-        }
+        payload.data = signatureData.signatureText
+        // Match the controller's expected field name
+        payload.signatureType = "text"
+        payload.signatureData = signatureData.signatureText
       } else {
-        throw new Error('No valid signature data found')
+        throw new Error("No valid signature data found")
       }
 
       // Send to API
       const response = await api.updateUserSignature(payload, authContext)
+
       if (response.success) {
+        // Update local state with response data
+        if (response.signature) {
+          setSignatureData((prev) => ({
+            ...prev,
+            enabled: response.signature.enabled,
+            cloudinaryId: response.signature.cloudinaryId,
+            updatedAt: response.signature.updatedAt,
+          }))
+        }
+
         toast({
           title: "Signature updated",
           description: "Your digital signature has been saved successfully",
         })
       } else {
-        throw new Error(response.message || 'Failed to save signature')
+        throw new Error(response.message || "Failed to save signature")
       }
     } catch (error) {
       console.error("Error saving signature:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to save signature. Please try again.",
-        variant: "destructive"
+        variant: "destructive",
       })
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -287,6 +370,15 @@ export default function SignatureSettingsPage() {
 
   const themeColor = getThemeColor()
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading signature settings...</span>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -294,11 +386,58 @@ export default function SignatureSettingsPage() {
         <p className="text-slate-600 mt-1">Create and manage your digital signature for document approvals</p>
       </div>
 
+      {/* Signature Status Card */}
+      {signatureData.enabled && (
+        <Alert className="border-green-200 bg-green-50">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <strong>Digital signature is active</strong>
+                <div className="text-sm mt-1">
+                  Type:{" "}
+                  <Badge variant="outline" className="ml-1">
+                    {signatureData.type}
+                  </Badge>
+                  {signatureData.updatedAt && (
+                    <span className="ml-2 text-muted-foreground">
+                      Last updated: {new Date(signatureData.updatedAt).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="text-sm font-medium">Ready for use</span>
+              </div>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!signatureData.enabled && signatureData.updatedAt && (
+        <Alert className="border-orange-200 bg-orange-50">
+          <AlertCircle className="h-4 w-4 text-orange-600" />
+          <AlertDescription className="text-orange-800">
+            <strong>Digital signature is disabled</strong>
+            <div className="text-sm mt-1">
+              You have a signature on file but it's currently disabled. Enable it below to use for approvals.
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card className="border-l-4 border-l-blue-500">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <PenTool className="w-5 h-5 text-blue-600" />
             Digital Signature
+            {signatureData.enabled && (
+              <Badge variant="secondary" className="ml-2">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Active
+              </Badge>
+            )}
           </CardTitle>
           <CardDescription>Set up your digital signature for document approval</CardDescription>
         </CardHeader>
@@ -309,6 +448,9 @@ export default function SignatureSettingsPage() {
                 Enable Digital Signature
               </Label>
               <p className="text-sm text-slate-600">Use digital signature for approvals</p>
+              {signatureData.cloudinaryId && (
+                <p className="text-xs text-muted-foreground mt-1">Signature ID: {signatureData.cloudinaryId}</p>
+              )}
             </div>
             <Switch
               id="has-signature"
@@ -319,7 +461,7 @@ export default function SignatureSettingsPage() {
 
           {signatureData.hasSignature && (
             <>
-              <Tabs defaultValue="draw" onValueChange={(value) => setSignatureMethod(value as any)}>
+              <Tabs value={signatureMethod} onValueChange={(value) => setSignatureMethod(value as any)}>
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="draw" className="flex items-center gap-2">
                     <PenTool className="w-4 h-4" />
@@ -381,7 +523,9 @@ export default function SignatureSettingsPage() {
                           Upload Signature
                         </label>
                       </Button>
-                      <p className="text-sm text-slate-500 mt-2">Upload a clear image of your signature (PNG, JPG)</p>
+                      <p className="text-sm text-slate-500 mt-2">
+                        Upload a clear image of your signature (PNG, JPG, max 5MB)
+                      </p>
                     </div>
                   </div>
                 </TabsContent>
@@ -420,14 +564,65 @@ export default function SignatureSettingsPage() {
                 </div>
               </div>
 
+              {/* Current Signature Info */}
+              {signatureData.enabled && signatureData.updatedAt && (
+                <div className="p-4 bg-slate-50 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock className="w-4 h-4 text-slate-600" />
+                    <Label className="text-sm font-medium">Current Signature Information</Label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Type:</span>
+                      <Badge variant="outline" className="ml-2">
+                        {signatureData.type}
+                      </Badge>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Status:</span>
+                      <Badge variant={signatureData.enabled ? "default" : "secondary"} className="ml-2">
+                        {signatureData.enabled ? "Active" : "Disabled"}
+                      </Badge>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Last Updated:</span>
+                      <span className="ml-2">{new Date(signatureData.updatedAt).toLocaleString()}</span>
+                    </div>
+                    {signatureData.cloudinaryId && (
+                      <div>
+                        <span className="text-muted-foreground">Storage ID:</span>
+                        <span className="ml-2 font-mono text-xs">{signatureData.cloudinaryId}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between pt-4 border-t">
-                <Button variant="outline" onClick={downloadSignature} disabled={!signatureData.signatureUrl}>
+                <Button
+                  variant="outline"
+                  onClick={downloadSignature}
+                  disabled={!signatureData.signatureUrl && signatureMethod !== "text"}
+                >
                   <Download className="w-4 h-4 mr-2" />
                   Download Signature
                 </Button>
-                <Button onClick={handleSignatureSave} className="bg-blue-600 hover:bg-blue-700">
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Signature
+                <Button
+                  onClick={handleSignatureSave}
+                  className="bg-blue-600 hover:bg-blue-700"
+                  disabled={saving || (!signatureData.signatureUrl && !signatureData.signatureText)}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Signature
+                    </>
+                  )}
                 </Button>
               </div>
             </>

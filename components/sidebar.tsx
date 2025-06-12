@@ -24,12 +24,11 @@ import {
   Bell,
   PenTool,
   User,
-  LogOut,
 } from "lucide-react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { useAuth } from "@/contexts/AuthContext"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface SidebarProps {
   user: {
@@ -42,11 +41,12 @@ interface SidebarProps {
     position?: string
     avatar?: string
   }
+  isMobile?: boolean
+  onNavigate?: () => void
 }
 
-export default function Sidebar({ user }: SidebarProps) {
+export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarProps) {
   const pathname = usePathname()
-  const { logout } = useAuth()
   const [openSections, setOpenSections] = useState<string[]>(["dashboard"])
 
   const toggleSection = (section: string) => {
@@ -149,29 +149,23 @@ export default function Sidebar({ user }: SidebarProps) {
   ]
 
   const directorNavigation: NavItem[] = [
-    // {
-    //   name: "Dashboard",
-    //   href: "/dashboard",
-    //   icon: LayoutDashboard,
-    //   key: "dashboard",
-    // },
+    {
+      name: "Dashboard",
+      href: "/dashboard",
+      icon: LayoutDashboard,
+      key: "dashboard",
+    },
     {
       name: "Files",
       icon: FileText,
       key: "files",
-      children: [
-        // { name: "Review Files", href: "/dashboard/files/review", icon: Eye },
-        { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox, badge: "3" },
-      ],
+      children: [{ name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox, badge: "3" }],
     },
     {
       name: "Requests",
       icon: MessageSquare,
       key: "requests",
-      children: [
-        { name: "Review Requests", href: "/dashboard/requests/review", icon: Eye },
-        // { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox, badge: "5" },
-      ],
+      children: [{ name: "Review Requests", href: "/dashboard/requests/review", icon: Eye }],
     },
     {
       name: "Reports",
@@ -198,12 +192,12 @@ export default function Sidebar({ user }: SidebarProps) {
   ]
 
   const departmentNavigation: NavItem[] = [
-    // {
-    //   name: "Dashboard",
-    //   href: "/dashboard",
-    //   icon: LayoutDashboard,
-    //   key: "dashboard",
-    // },
+    {
+      name: "Dashboard",
+      href: "/dashboard",
+      icon: LayoutDashboard,
+      key: "dashboard",
+    },
     {
       name: "Files",
       icon: FileText,
@@ -265,29 +259,38 @@ export default function Sidebar({ user }: SidebarProps) {
     return children.some((child) => isActive(child.href))
   }
 
-  return (
-    <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-white border-r border-slate-200 overflow-y-auto">
+  const handleLinkClick = () => {
+    if (isMobile && onNavigate) {
+      onNavigate()
+    }
+  }
+
+  const sidebarContent = (
+    <div className="flex flex-col h-full">
       {/* User Profile Section */}
-      <div className="p-4 border-b border-slate-200">
+      <div className="p-4 border-b border-slate-200 bg-slate-50">
         <div className="flex items-center space-x-3">
-          <Avatar>
+          <Avatar className="h-10 w-10">
             <AvatarImage src={user.avatar || "/placeholder.svg?height=40&width=40"} alt="User" />
             <AvatarFallback className={`bg-${themeColor}-100 text-${themeColor}-800`}>
               {user.firstName?.charAt(0)}
               {user.lastName?.charAt(0)}
             </AvatarFallback>
           </Avatar>
-          <div>
-            <p className="text-sm font-medium text-slate-900">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-slate-900 truncate">
               {user.firstName} {user.lastName}
             </p>
-            <p className="text-xs text-slate-500">{user.email}</p>
+            <p className="text-xs text-slate-500 truncate" title={user.email}>
+              {user.email}
+            </p>
+            {user.position && <p className="text-xs text-slate-400 truncate">{user.position}</p>}
           </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <div className="p-4">
+      <ScrollArea className="flex-1 px-4 py-4">
         <nav className="space-y-1">
           {navigation.map((item) => (
             <div key={item.key} className="mb-1">
@@ -298,26 +301,26 @@ export default function Sidebar({ user }: SidebarProps) {
                 >
                   <CollapsibleTrigger
                     className={cn(
-                      "flex items-center justify-between w-full px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                      "flex items-center justify-between w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 hover:bg-slate-100",
                       hasActiveChild(item.children)
-                        ? `bg-${themeColor}-50 text-${themeColor}-700`
-                        : "text-slate-700 hover:bg-slate-100",
+                        ? `bg-${themeColor}-50 text-${themeColor}-700 border border-${themeColor}-200`
+                        : "text-slate-700",
                     )}
                   >
                     <div className="flex items-center">
-                      <item.icon className="w-5 h-5 mr-3" />
-                      {item.name}
+                      <item.icon className="w-5 h-5 mr-3 flex-shrink-0" />
+                      <span className="truncate">{item.name}</span>
                     </div>
-                    <div className="flex items-center">
+                    <div className="flex items-center space-x-1">
                       {item.badge && (
-                        <Badge variant="secondary" className="mr-2 h-5 px-1.5 text-xs">
+                        <Badge variant="secondary" className="h-5 px-1.5 text-xs">
                           {item.badge}
                         </Badge>
                       )}
-                      {openSections.includes(item.key) ? (
-                        <ChevronDown className="w-4 h-4" />
+                      {openSections.includes(item.key) || hasActiveChild(item.children) ? (
+                        <ChevronDown className="w-4 h-4 flex-shrink-0" />
                       ) : (
-                        <ChevronRight className="w-4 h-4" />
+                        <ChevronRight className="w-4 h-4 flex-shrink-0" />
                       )}
                     </div>
                   </CollapsibleTrigger>
@@ -326,19 +329,20 @@ export default function Sidebar({ user }: SidebarProps) {
                       <Link
                         key={child.href}
                         href={child.href}
+                        onClick={handleLinkClick}
                         className={cn(
-                          "flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors",
+                          "flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all duration-200 hover:bg-slate-100",
                           isActive(child.href)
-                            ? `bg-${themeColor}-100 text-${themeColor}-700 font-medium`
-                            : "text-slate-600 hover:bg-slate-100",
+                            ? `bg-${themeColor}-100 text-${themeColor}-700 font-medium border border-${themeColor}-200`
+                            : "text-slate-600",
                         )}
                       >
-                        <div className="flex items-center">
-                          <child.icon className="w-4 h-4 mr-3" />
-                          {child.name}
+                        <div className="flex items-center min-w-0">
+                          <child.icon className="w-4 h-4 mr-3 flex-shrink-0" />
+                          <span className="truncate">{child.name}</span>
                         </div>
                         {child.badge && (
-                          <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                          <Badge variant="secondary" className="h-5 px-1.5 text-xs ml-2 flex-shrink-0">
                             {child.badge}
                           </Badge>
                         )}
@@ -349,19 +353,20 @@ export default function Sidebar({ user }: SidebarProps) {
               ) : (
                 <Link
                   href={item.href || "#"}
+                  onClick={handleLinkClick}
                   className={cn(
-                    "flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                    "flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 hover:bg-slate-100",
                     isActive(item.href)
-                      ? `bg-${themeColor}-100 text-${themeColor}-700`
-                      : "text-slate-700 hover:bg-slate-100",
+                      ? `bg-${themeColor}-100 text-${themeColor}-700 border border-${themeColor}-200`
+                      : "text-slate-700",
                   )}
                 >
-                  <div className="flex items-center">
-                    <item.icon className="w-5 h-5 mr-3" />
-                    {item.name}
+                  <div className="flex items-center min-w-0">
+                    <item.icon className="w-5 h-5 mr-3 flex-shrink-0" />
+                    <span className="truncate">{item.name}</span>
                   </div>
                   {item.badge && (
-                    <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                    <Badge variant="secondary" className="h-5 px-1.5 text-xs ml-2 flex-shrink-0">
                       {item.badge}
                     </Badge>
                   )}
@@ -370,18 +375,17 @@ export default function Sidebar({ user }: SidebarProps) {
             </div>
           ))}
         </nav>
-      </div>
+      </ScrollArea>
+    </div>
+  )
 
-      {/* Logout Button */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200">
-        <button
-          onClick={logout}
-          className="flex items-center w-full px-3 py-2 text-sm font-medium text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-        >
-          <LogOut className="w-5 h-5 mr-3" />
-          Sign Out
-        </button>
-      </div>
+  if (isMobile) {
+    return sidebarContent
+  }
+
+  return (
+    <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-white border-r border-slate-200 hidden lg:block">
+      {sidebarContent}
     </div>
   )
 }

@@ -28,7 +28,6 @@ import {
   Inbox,
   FileText,
   Eye,
-  Edit,
   Trash2,
   CheckCircle,
   XCircle,
@@ -48,6 +47,7 @@ import {
   Shield,
   Clock,
   MessageSquare,
+  Plus,
 } from "lucide-react"
 import { redirect, useRouter } from "next/navigation"
 
@@ -66,6 +66,7 @@ interface FileData {
     type: string
   }
   createdBy: {
+    _id: string
     firstName: string
     lastName: string
     email: string
@@ -78,11 +79,18 @@ interface FileData {
   createdAt: string
   updatedAt: string
   sharedWith?: Array<{
-    user: string
+    user: {
+      _id: string
+      firstName: string
+      lastName: string
+      email: string
+      role: string
+    }
     permission: string
     sharedAt: string
   }>
   signatures?: Array<{
+    _id: string
     user: string
     signatureData: string
     signedAt: string
@@ -111,6 +119,11 @@ export default function InboxPageEnhanced() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [showSignatureDialog, setShowSignatureDialog] = useState(false)
+  const [showAddSignatureDialog, setShowAddSignatureDialog] = useState(false)
+
+  // Signature states
+  const [signatureText, setSignatureText] = useState("")
+  const [isAddingSignature, setIsAddingSignature] = useState(false)
 
   // Redirect if not authenticated
   if (!authContext.isAuthenticated) {
@@ -121,16 +134,25 @@ export default function InboxPageEnhanced() {
   useEffect(() => {
     const fetchUserSignature = async () => {
       try {
-        const savedSignature = localStorage.getItem("signatureData")
-        if (savedSignature) {
-          setUserSignature(JSON.parse(savedSignature))
+        const response = await api.getUserSignature(authContext)
+        if (response.success && response.signature) {
+          const signature = response.signature
+          setUserSignature({
+            enabled: signature.enabled,
+            type: signature.type,
+            data: signature.data,
+            cloudinaryId: signature.cloudinaryId,
+            updatedAt: signature.updatedAt,
+          })
         }
       } catch (error) {
         console.error("Error fetching user signature:", error)
       }
     }
 
-    fetchUserSignature()
+    if (authContext.isAuthenticated) {
+      fetchUserSignature()
+    }
   }, [authContext])
 
   // Fetch inbox files (files shared with user's department)
@@ -171,44 +193,82 @@ export default function InboxPageEnhanced() {
     setFilteredFiles(filtered)
   }, [files, searchTerm])
 
+  // Add signature to file
+  const handleAddSignature = async () => {
+    if (!selectedFile || !signatureText.trim()) {
+      toast({
+        title: "Missing signature",
+        description: "Please provide your signature",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsAddingSignature(true)
+
+    try {
+      const signatureData = userSignature?.enabled && userSignature?.data ? userSignature.data : signatureText
+
+      const response = await api.addSignature(selectedFile._id, { signatureData }, authContext)
+
+      if (response.success) {
+        // Update local state
+        setFiles((prev) =>
+          prev.map((file) =>
+            file._id === selectedFile._id
+              ? {
+                  ...file,
+                  signatures: [
+                    ...(file.signatures || []),
+                    {
+                      _id: Date.now().toString(),
+                      user: authContext.user?.id || "",
+                      signatureData,
+                      signedAt: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : file,
+          ),
+        )
+
+        setShowAddSignatureDialog(false)
+        setSignatureText("")
+
+        toast({
+          title: "Signature added",
+          description: "Your signature has been added to the file",
+        })
+      } else {
+        throw new Error(response.error || "Failed to add signature")
+      }
+    } catch (error: any) {
+      toast({
+        title: "Signature failed",
+        description: error.message || "Failed to add signature",
+        variant: "destructive",
+      })
+    } finally {
+      setIsAddingSignature(false)
+    }
+  }
+
   const handleFileAction = async (action: "approve" | "reject" | "sendback") => {
     if (!selectedFile) return
 
-    // Check if approval requires signature
+    // Check if approval requires signature and user hasn't signed yet
     if (action === "approve" && selectedFile.requiresSignature) {
-      if (!userSignature || !userSignature.hasSignature) {
-        setShowSignatureDialog(true)
-        return
-      }
+      const userHasSigned = selectedFile.signatures?.some((sig) => sig.user === authContext.user?.id)
 
-      // Check if user already signed this file
-      const alreadySigned = selectedFile.signatures?.some((sig) => sig.user === authContext.user?.id)
-
-      if (!alreadySigned) {
-        // Add signature first
-        try {
-          const signatureResponse = await api.addSignature(
-            selectedFile._id,
-            { signatureData: userSignature.signatureUrl || userSignature.signatureText },
-            authContext,
-          )
-
-          if (!signatureResponse.success) {
-            toast({
-              title: "Signature failed",
-              description: "Failed to add signature to file",
-              variant: "destructive",
-            })
-            return
-          }
-        } catch (error) {
-          toast({
-            title: "Signature failed",
-            description: "Failed to add signature to file",
-            variant: "destructive",
-          })
+      if (!userHasSigned) {
+        if (!userSignature?.enabled) {
+          setShowSignatureDialog(true)
           return
         }
+
+        // Show add signature dialog
+        setShowAddSignatureDialog(true)
+        return
       }
     }
 
@@ -228,6 +288,9 @@ export default function InboxPageEnhanced() {
         action,
         comment: actionComment,
         requiresSignature: action === "approve" ? requireSignature : false,
+        ...(action === "approve" && selectedFile.requiresSignature && userSignature?.enabled
+          ? { signatureData: userSignature.data }
+          : {}),
       }
 
       const response = await api.takeFileAction(selectedFile._id, actionData, authContext)
@@ -294,45 +357,7 @@ export default function InboxPageEnhanced() {
     const sizes = ["Bytes", "KB", "MB", "GB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
-}
-
-// Format signature data
-const formatSignature = (signature: any) => {
-  if (!signature) return null
-  
-  // Try to parse signature data as JSON
-  try {
-    const sigData = JSON.parse(signature.signatureData)
-    
-    // If it's an object with imageUrl, return it as is
-    if (sigData && sigData.imageUrl) {
-      return sigData
-    }
-    
-    // If it's just a string in JSON, return it
-    if (typeof sigData === 'string') {
-      return sigData
-    }
-    
-    // If it's an object with text content, return that
-    if (sigData && sigData.text) {
-      return sigData.text
-    }
-    
-    return sigData
-  } catch (error) {
-    // If parsing fails, return the raw data
-    return signature.signatureData
   }
-}
-
-// const getPriorityColor = (priority: string) => {
-//     if (bytes === 0) return "0 Bytes"
-//     const k = 1024
-//     const sizes = ["Bytes", "KB", "MB", "GB"]
-//     const i = Math.floor(Math.log(bytes) / Math.log(k))
-//     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
-//   }
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -386,10 +411,20 @@ const formatSignature = (signature: any) => {
     setShowReviewModal(true)
   }
 
+  const openAddSignatureDialog = (file: FileData) => {
+    setSelectedFile(file)
+    setShowAddSignatureDialog(true)
+  }
+
   const handleGoToSettings = () => {
     setShowSignatureDialog(false)
     setShowReviewModal(false)
-    router.push("/settings/signature")
+    router.push("/dashboard/settings/signature")
+  }
+
+  // Check if user has already signed the file
+  const hasUserSigned = (file: FileData) => {
+    return file.signatures?.some((sig) => sig.user === authContext.user?.id)
   }
 
   if (loading) {
@@ -477,14 +512,16 @@ const formatSignature = (signature: any) => {
                             <Eye className="w-4 h-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEditModal(file)}>
-                            <Edit className="w-4 h-4 mr-2" />
-                            Edit File
-                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openReviewModal(file)}>
                             <CheckCircle className="w-4 h-4 mr-2" />
                             Review & Approve
                           </DropdownMenuItem>
+                          {file.requiresSignature && !hasUserSigned(file) && (
+                            <DropdownMenuItem onClick={() => openAddSignatureDialog(file)}>
+                              <PenTool className="w-4 h-4 mr-2" />
+                              Add Signature
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => openDeleteDialog(file)} className="text-red-600">
                             <Trash2 className="w-4 h-4 mr-2" />
                             Delete
@@ -514,40 +551,18 @@ const formatSignature = (signature: any) => {
                       <Badge className={`text-xs ${getStatusColor(file.status)}`}>{file.status}</Badge>
                       {file.requiresSignature && (
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">
+                          <Badge
+                            variant="outline"
+                            className={`text-xs ${hasUserSigned(file) ? "text-green-600 border-green-200" : "text-blue-600 border-blue-200"}`}
+                          >
                             <PenTool className="w-2 h-2 mr-1" />
-                            {file.signatures && file.signatures.length > 0 
-                              ? `Signed (${file.signatures.length})`
-                              : 'Signature Required'}
+                            {hasUserSigned(file) ? "Signed" : "Signature Required"}
                           </Badge>
-                          
-                          {/* Signature Status Indicator */}
-                          {file.signatures && file.signatures.length > 0 && (
-                            <div className="flex items-center gap-1">
-                              {file.signatures.map((sig: any) => {
-                                const user = file.sharedWith?.find((share: any) => share.user === sig.user)
-                                if (!user) return null
 
-                                // Get signature type based on role
-                                const signatureType = user.role === 'department' ? 'dept' : 'admin'
-                                
-                                // Get status based on signature
-                                const status = sig.user === authContext.user?.id ? 'current' : 'other'
-                                
-                                return (
-                                  <div 
-                                    key={sig._id} 
-                                    className={`w-2 h-2 rounded-full ${
-                                      status === 'current' 
-                                        ? 'bg-blue-500' 
-                                        : signatureType === 'dept' 
-                                        ? 'bg-green-500' 
-                                        : 'bg-purple-500'
-                                    }`}
-                                  />
-                                )
-                              })}
-                            </div>
+                          {file.signatures && file.signatures.length > 0 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {file.signatures.length} signature{file.signatures.length !== 1 ? "s" : ""}
+                            </Badge>
                           )}
                         </div>
                       )}
@@ -565,6 +580,12 @@ const formatSignature = (signature: any) => {
                         <Eye className="w-3 h-3 mr-1" />
                         Review
                       </Button>
+                      {file.requiresSignature && !hasUserSigned(file) && (
+                        <Button size="sm" variant="outline" onClick={() => openAddSignatureDialog(file)}>
+                          <PenTool className="w-3 h-3 mr-1" />
+                          Sign
+                        </Button>
+                      )}
                       <Button size="sm" variant="ghost" asChild>
                         <a href={file.file.url} target="_blank" rel="noopener noreferrer">
                           <Download className="w-3 h-3" />
@@ -589,6 +610,7 @@ const formatSignature = (signature: any) => {
                       <TableHead>Category</TableHead>
                       <TableHead>Priority</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Signature</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -622,14 +644,25 @@ const formatSignature = (signature: any) => {
                           <Badge className={getPriorityColor(file.priority)}>{file.priority}</Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Badge className={getStatusColor(file.status)}>{file.status}</Badge>
-                            {file.requiresSignature && (
-                              <Badge variant="outline" className="text-blue-600 border-blue-200">
-                                <PenTool className="w-3 h-3" />
+                          <Badge className={getStatusColor(file.status)}>{file.status}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {file.requiresSignature ? (
+                            <div className="flex items-center space-x-2">
+                              <Badge
+                                variant="outline"
+                                className={`text-xs ${hasUserSigned(file) ? "text-green-600 border-green-200" : "text-blue-600 border-blue-200"}`}
+                              >
+                                <PenTool className="w-3 h-3 mr-1" />
+                                {hasUserSigned(file) ? "Signed" : "Required"}
                               </Badge>
-                            )}
-                          </div>
+                              {file.signatures && file.signatures.length > 0 && (
+                                <span className="text-xs text-muted-foreground">({file.signatures.length})</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Not required</span>
+                          )}
                         </TableCell>
                         <TableCell>{new Date(file.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell className="text-right">
@@ -637,12 +670,14 @@ const formatSignature = (signature: any) => {
                             <Button variant="ghost" size="sm" onClick={() => openViewModal(file)}>
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => openEditModal(file)}>
-                              <Edit className="w-4 h-4" />
-                            </Button>
                             <Button variant="ghost" size="sm" onClick={() => openReviewModal(file)}>
                               <CheckCircle className="w-4 h-4" />
                             </Button>
+                            {file.requiresSignature && !hasUserSigned(file) && (
+                              <Button variant="ghost" size="sm" onClick={() => openAddSignatureDialog(file)}>
+                                <PenTool className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button variant="ghost" size="sm" asChild>
                               <a href={file.file.url} target="_blank" rel="noopener noreferrer">
                                 <Download className="w-4 h-4" />
@@ -667,6 +702,79 @@ const formatSignature = (signature: any) => {
           )}
         </>
       )}
+
+      {/* Add Signature Dialog */}
+      <Dialog open={showAddSignatureDialog} onOpenChange={setShowAddSignatureDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PenTool className="w-5 h-5 text-blue-600" />
+              Add Your Signature
+            </DialogTitle>
+            <DialogDescription>Add your digital signature to approve this file</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {userSignature?.enabled ? (
+              <div className="space-y-3">
+                <Label>Your Saved Signature</Label>
+                <div className="p-4 border rounded-lg bg-slate-50">
+                  {userSignature.type === "draw" ? (
+                    <img
+                      src={userSignature.data || "/placeholder.svg"}
+                      alt="Your signature"
+                      className="max-w-full h-16 object-contain"
+                    />
+                  ) : (
+                    <p className="font-script text-lg">{userSignature.data}</p>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">This signature will be used for the file approval.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Label htmlFor="signature-text">Type Your Signature</Label>
+                <Input
+                  id="signature-text"
+                  placeholder="Enter your full name as signature"
+                  value={signatureText}
+                  onChange={(e) => setSignatureText(e.target.value)}
+                  className="font-script text-lg"
+                />
+                <p className="text-sm text-muted-foreground">
+                  You can set up a permanent signature in settings for future use.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end space-x-3">
+            <Button variant="outline" onClick={() => setShowAddSignatureDialog(false)} disabled={isAddingSignature}>
+              Cancel
+            </Button>
+            <Button onClick={() => router.push("/dashboard/settings/signature")} variant="outline">
+              <Settings className="w-4 h-4 mr-2" />
+              Signature Settings
+            </Button>
+            <Button
+              onClick={handleAddSignature}
+              disabled={isAddingSignature || (!userSignature?.enabled && !signatureText.trim())}
+            >
+              {isAddingSignature ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <PenTool className="w-4 h-4 mr-2" />
+                  Add Signature
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Enhanced Review File Modal */}
       <Dialog open={showReviewModal} onOpenChange={setShowReviewModal}>
@@ -784,107 +892,52 @@ const formatSignature = (signature: any) => {
                           <Label className="text-sm font-medium text-blue-800">Digital Signature Required</Label>
                         </div>
                         <p className="text-sm text-blue-700">
-                          This file requires a digital signature for approval. Your signature will be added automatically
-                          when you approve.
+                          This file requires a digital signature for approval.
+                          {hasUserSigned(selectedFile)
+                            ? " You have already signed this file."
+                            : " Please add your signature before approving."}
                         </p>
+                        {!hasUserSigned(selectedFile) && (
+                          <Button size="sm" className="mt-2" onClick={() => openAddSignatureDialog(selectedFile)}>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Signature
+                          </Button>
+                        )}
                       </div>
 
-                      {/* Department Signatures */}
+                      {/* Existing Signatures */}
                       {selectedFile.signatures && selectedFile.signatures.length > 0 && (
                         <div>
-                          <Label className="text-sm font-medium text-muted-foreground">Department Signatures</Label>
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Signatures ({selectedFile.signatures.length})
+                          </Label>
                           <div className="space-y-2 mt-2">
-                            {selectedFile.signatures.map((sig: any) => {
-                              const signature = formatSignature(sig)
-                              const user = selectedFile.sharedWith?.find((share: any) => share.user === sig.user)
-                              
-                              if (!user || user.role !== 'department') return null
-
-                              return (
-                                <div key={sig._id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
-                                  <div className="flex items-center space-x-2">
-                                    <User className="w-4 h-4 text-blue-600" />
-                                    <div>
-                                      <p className="font-medium">
-                                        {user.user.firstName} {user.user.lastName}
-                                      </p>
-                                      <p className="text-sm text-muted-foreground">{user.user.email}</p>
-                                    </div>
-                                  </div>
-                                  <div className="flex-1">
+                            {selectedFile.signatures.map((sig) => (
+                              <div key={sig._id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
+                                <div className="flex items-center space-x-2">
+                                  <User className="w-4 h-4 text-blue-600" />
+                                  <div>
+                                    <p className="font-medium">{sig.user === authContext.user?.id ? "You" : "User"}</p>
                                     <p className="text-sm text-muted-foreground">
                                       Signed on: {new Date(sig.signedAt).toLocaleString()}
                                     </p>
-                                    {signature && (
-                                      <div className="mt-1">
-                                        <p className="text-sm text-blue-600">Signature Preview:</p>
-                                        <div className="mt-1 p-2 bg-white border rounded">
-                                          {typeof signature === 'string' ? (
-                                            <p className="text-sm">{signature}</p>
-                                          ) : (
-                                            <img 
-                                              src={signature.imageUrl} 
-                                              alt="Signature"
-                                              className="w-24 h-12 object-contain"
-                                            />
-                                          )}
-                                        </div>
-                                      </div>
+                                  </div>
+                                </div>
+                                <div className="flex-1">
+                                  <div className="mt-1 p-2 bg-white border rounded">
+                                    {sig.signatureData.startsWith("data:image") ? (
+                                      <img
+                                        src={sig.signatureData || "/placeholder.svg"}
+                                        alt="Signature"
+                                        className="w-24 h-12 object-contain"
+                                      />
+                                    ) : (
+                                      <p className="text-sm font-script">{sig.signatureData}</p>
                                     )}
                                   </div>
                                 </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Admin Signatures */}
-                      {selectedFile.signatures && selectedFile.signatures.length > 0 && (
-                        <div>
-                          <Label className="text-sm font-medium text-muted-foreground">Admin Signatures</Label>
-                          <div className="space-y-2 mt-2">
-                            {selectedFile.signatures.map((sig: any) => {
-                              const signature = formatSignature(sig)
-                              const user = selectedFile.sharedWith?.find((share: any) => share.user === sig.user)
-                              
-                              if (!user || user.role !== 'admin') return null
-
-                              return (
-                                <div key={sig._id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
-                                  <div className="flex items-center space-x-2">
-                                    <User className="w-4 h-4 text-blue-600" />
-                                    <div>
-                                      <p className="font-medium">
-                                        {user.user.firstName} {user.user.lastName}
-                                      </p>
-                                      <p className="text-sm text-muted-foreground">{user.user.email}</p>
-                                    </div>
-                                  </div>
-                                  <div className="flex-1">
-                                    <p className="text-sm text-muted-foreground">
-                                      Signed on: {new Date(sig.signedAt).toLocaleString()}
-                                    </p>
-                                    {signature && (
-                                      <div className="mt-1">
-                                        <p className="text-sm text-blue-600">Signature Preview:</p>
-                                        <div className="mt-1 p-2 bg-white border rounded">
-                                          {typeof signature === 'string' ? (
-                                            <p className="text-sm">{signature}</p>
-                                          ) : (
-                                            <img 
-                                              src={signature.imageUrl} 
-                                              alt="Signature"
-                                              className="w-24 h-12 object-contain"
-                                            />
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })}
+                              </div>
+                            ))}
                           </div>
                         </div>
                       )}
@@ -902,60 +955,6 @@ const formatSignature = (signature: any) => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Approval Status */}
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium text-muted-foreground">Approval Status</Label>
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-green-100 text-green-800 border-green-200">
-                        {selectedFile?.approvalStatus || 'pending'}
-                      </Badge>
-                      <p className="text-sm text-muted-foreground">
-                        Last updated: {new Date(selectedFile?.updatedAt || selectedFile?.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Department Approvals */}
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium text-muted-foreground">Department Approvals</Label>
-                    <div className="space-y-2">
-                      {selectedFile?.departments?.map((dept) => (
-                        <div key={dept._id} className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            <Building2 className="w-3 h-3 mr-1" />
-                            {dept.name} ({dept.code})
-                          </Badge>
-                          <p className="text-sm text-muted-foreground">
-                            Status: {selectedFile?.status || 'pending'}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Director Approvals */}
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium text-muted-foreground">Director Approvals</Label>
-                    <div className="space-y-2">
-                      {selectedFile?.sharedWith?.filter(share => share.user.role === 'director').map((share) => (
-                        <div key={share._id} className="flex items-center gap-2">
-                          <div className="flex items-center space-x-2">
-                            <User className="w-4 h-4 text-blue-600" />
-                            <div>
-                              <p className="font-medium">
-                                {share.user.firstName} {share.user.lastName}
-                              </p>
-                              <p className="text-sm text-muted-foreground">{share.user.email}</p>
-                            </div>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            Status: {selectedFile?.status || 'pending'}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
                   {/* Comment Section */}
                   <div className="space-y-2">
                     <Label htmlFor="action-comment" className="text-sm font-medium">

@@ -9,14 +9,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
 import { api } from "@/utils/api"
-import { Upload, FileText, X, Save, Send, ImageIcon, Video, Loader2, AlertCircle } from "lucide-react"
+import { Upload, FileText, X, Save, Send, ImageIcon, Video, Loader2, AlertCircle, Building2, Users } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Department {
   _id: string
@@ -32,11 +34,10 @@ export default function CreateFilePage() {
 
   const [formData, setFormData] = useState({
     title: "",
-    department: "",
+    departments: [] as string[], // Changed to array for multi-select
     description: "",
     category: "document",
     priority: "medium",
-    requiresSignature: false,
   })
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -135,11 +136,30 @@ export default function CreateFilePage() {
     }
   }
 
+  // Handle department selection
+  const handleDepartmentToggle = (departmentId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      departments: prev.departments.includes(departmentId)
+        ? prev.departments.filter((id) => id !== departmentId)
+        : [...prev.departments, departmentId],
+    }))
+  }
+
+  // Select all departments
+  const handleSelectAllDepartments = () => {
+    const allDepartmentIds = departments.map((dept) => dept._id)
+    setFormData((prev) => ({
+      ...prev,
+      departments: prev.departments.length === departments.length ? [] : allDepartmentIds,
+    }))
+  }
+
   const handleSubmit = async (action: "draft" | "submit") => {
-    if (!formData.title || !formData.department) {
+    if (!formData.title || formData.departments.length === 0) {
       toast({
         title: "Missing required fields",
-        description: "Please fill in title and department",
+        description: "Please fill in title and select at least one department",
         variant: "destructive",
       })
       return
@@ -165,10 +185,18 @@ export default function CreateFilePage() {
       formDataToSend.append("title", formData.title)
       formDataToSend.append("description", formData.description)
       formDataToSend.append("category", formData.category)
-      formDataToSend.append("department", formData.department)
       formDataToSend.append("priority", formData.priority)
-      formDataToSend.append("requiresSignature", formData.requiresSignature.toString())
+
       formDataToSend.append("status", action === "draft" ? "draft" : "pending")
+
+      // Add multiple departments as an array
+      const departmentArray = Array.isArray(formData.departments) ? formData.departments : []
+      if (departmentArray.length > 0) {
+        // Send as JSON string since we need to maintain array format
+        formDataToSend.append("departments", JSON.stringify(departmentArray))
+      } else {
+        throw new Error("No departments selected")
+      }
 
       // Add the file (controller expects field name 'file')
       formDataToSend.append("file", selectedFile)
@@ -179,7 +207,7 @@ export default function CreateFilePage() {
         fileSize: selectedFile.size,
         fileType: selectedFile.type,
         title: formData.title,
-        department: formData.department,
+        departments: formData.departments,
       })
 
       // Simulate upload progress
@@ -203,17 +231,19 @@ export default function CreateFilePage() {
       if (response.success) {
         toast({
           title: action === "draft" ? "Draft saved" : "File submitted",
-          description: action === "draft" ? "File saved as draft" : "File submitted successfully",
+          description:
+            action === "draft"
+              ? "File saved as draft"
+              : `File submitted successfully to ${formData.departments.length} department(s)`,
         })
 
         // Reset form
         setFormData({
           title: "",
-          department: "",
+          departments: [],
           description: "",
           category: "document",
           priority: "medium",
-          requiresSignature: false,
         })
         setSelectedFile(null)
         setUploadProgress(0)
@@ -317,28 +347,6 @@ export default function CreateFilePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="department">Target Department *</Label>
-              <Select
-                value={formData.department}
-                onValueChange={(value) => setFormData((prev) => ({ ...prev, department: value }))}
-                disabled={loadingDepartments || isSubmitting}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={loadingDepartments ? "Loading departments..." : "Select department"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map((dept) => (
-                    <SelectItem key={dept._id} value={dept._id}>
-                      {dept.name} ({dept.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
               <Select
                 value={formData.category}
@@ -357,6 +365,97 @@ export default function CreateFilePage() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Multi-select Departments */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center space-x-2">
+                <Building2 className="h-4 w-4" />
+                <span>Target Departments *</span>
+              </Label>
+              <div className="flex items-center space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectAllDepartments}
+                  disabled={loadingDepartments || isSubmitting}
+                >
+                  <Users className="w-4 h-4 mr-1" />
+                  {formData.departments.length === departments.length ? "Deselect All" : "Select All"}
+                </Button>
+                <Badge variant="secondary" className="text-xs">
+                  {formData.departments.length} selected
+                </Badge>
+              </div>
+            </div>
+
+            {loadingDepartments ? (
+              <div className="flex items-center justify-center p-8 border rounded-lg">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                <span>Loading departments...</span>
+              </div>
+            ) : (
+              <Card className="border-2 border-dashed">
+                <CardContent className="p-4">
+                  <ScrollArea className="h-48">
+                    <div className="space-y-3">
+                      {departments.map((dept) => (
+                        <div key={dept._id} className="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg">
+                          <Checkbox
+                            id={`dept-${dept._id}`}
+                            checked={formData.departments.includes(dept._id)}
+                            onCheckedChange={() => handleDepartmentToggle(dept._id)}
+                            disabled={isSubmitting}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <Label
+                              htmlFor={`dept-${dept._id}`}
+                              className="text-sm font-medium cursor-pointer flex items-center space-x-2"
+                            >
+                              <Building2 className="w-4 h-4 text-blue-600" />
+                              <span>{dept.name}</span>
+                              <Badge variant="outline" className="text-xs">
+                                {dept.code}
+                              </Badge>
+                            </Label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                  {formData.departments.length > 0 && (
+                    <div className="mt-3 pt-3 border-t">
+                      <Label className="text-sm font-medium text-muted-foreground">Selected Departments:</Label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {formData.departments.map((deptId) => {
+                          const dept = departments.find((d) => d._id === deptId)
+                          return dept ? (
+                            <Badge key={deptId} variant="secondary" className="text-xs">
+                              {dept.name} ({dept.code})
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-auto p-0 ml-1 hover:bg-transparent"
+                                onClick={() => handleDepartmentToggle(deptId)}
+                                disabled={isSubmitting}
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </Badge>
+                          ) : null
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
               <Select
@@ -389,26 +488,13 @@ export default function CreateFilePage() {
             />
           </div>
 
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div className="space-y-1">
-              <Label htmlFor="signature">Requires Signature</Label>
-              <p className="text-sm text-slate-600">Enable if this file requires approval with signature</p>
-            </div>
-            <Switch
-              id="signature"
-              checked={formData.requiresSignature}
-              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, requiresSignature: checked }))}
-              disabled={isSubmitting}
-            />
-          </div>
-
           {/* File Upload Section */}
           <div className="space-y-4">
             <Label>File Upload</Label>
             <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center">
               <Upload className="w-8 h-8 mx-auto text-slate-400 mb-2" />
               <p className="text-slate-600 mb-2">Select a file to upload</p>
-              <p className="text-sm text-slate-500 mb-4">Supports: JPG, PNG, PDF(Max 10MB)</p>
+              <p className="text-sm text-slate-500 mb-4">Supports: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX (Max 10MB)</p>
               <input
                 type="file"
                 onChange={handleFileSelect}
@@ -473,7 +559,7 @@ export default function CreateFilePage() {
             <Button
               variant="outline"
               onClick={() => handleSubmit("draft")}
-              disabled={isSubmitting || isUploading || !selectedFile}
+              disabled={isSubmitting || isUploading || !selectedFile || formData.departments.length === 0}
             >
               <Save className="w-4 h-4 mr-2" />
               {isSubmitting ? "Saving..." : "Save as Draft"}
@@ -481,7 +567,7 @@ export default function CreateFilePage() {
             <Button
               onClick={() => handleSubmit("submit")}
               className="bg-orange-500 hover:bg-orange-600"
-              disabled={isSubmitting || isUploading || !selectedFile}
+              disabled={isSubmitting || isUploading || !selectedFile || formData.departments.length === 0}
             >
               {isSubmitting ? (
                 <>
@@ -491,7 +577,7 @@ export default function CreateFilePage() {
               ) : (
                 <>
                   <Send className="w-4 h-4 mr-2" />
-                  Submit File
+                  Submit to {formData.departments.length} Department{formData.departments.length !== 1 ? "s" : ""}
                 </>
               )}
             </Button>

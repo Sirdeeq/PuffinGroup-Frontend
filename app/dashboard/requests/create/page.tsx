@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,10 +10,13 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
 import { api } from "@/utils/api"
-import { ArrowLeft, Send, Upload, X, FileText, AlertCircle, Loader2 } from "lucide-react"
+import { ArrowLeft, Send, Upload, X, FileText, AlertCircle, Loader2, Building2, Users } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 
@@ -56,7 +58,7 @@ export default function CreateRequestPage() {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    targetDepartments: "",
+    targetDepartments: [] as string[], // Changed to array
     assignedDirectors: "",
     priority: "medium",
     category: "approval",
@@ -95,23 +97,35 @@ export default function CreateRequestPage() {
     fetchDepartments()
   }, [authContext, toast])
 
-  // Fetch directors when department changes
+  // Fetch directors when departments change
   useEffect(() => {
     const fetchDirectors = async () => {
-      if (!formData.targetDepartments) return
+      if (formData.targetDepartments.length === 0) return
 
       try {
         setLoadingDirectors(true)
-        const response = await api.getDirectorsByDepartment(formData.targetDepartments, authContext)
+        // For multiple departments, we'll fetch directors from all selected departments
+        const allDirectors: Director[] = []
 
-        if (response.success && response.data) {
-          const { currentDirector, previousDirectors } = response.data
-          // Add current director to the list if it exists
-          const directorsList = currentDirector ? [currentDirector, ...previousDirectors] : previousDirectors
-          setDirectors(directorsList)
-        } else {
-          throw new Error(response.error || "Failed to fetch directors")
+        for (const deptId of formData.targetDepartments) {
+          try {
+            const response = await api.getDirectorsByDepartment(deptId, authContext)
+            if (response.success && response.data) {
+              const { currentDirector, previousDirectors } = response.data
+              if (currentDirector) allDirectors.push(currentDirector)
+              allDirectors.push(...previousDirectors)
+            }
+          } catch (error) {
+            console.error(`Error fetching directors for department ${deptId}:`, error)
+          }
         }
+
+        // Remove duplicates based on _id
+        const uniqueDirectors = allDirectors.filter(
+          (director, index, self) => index === self.findIndex((d) => d._id === director._id),
+        )
+
+        setDirectors(uniqueDirectors)
       } catch (error: any) {
         console.error("Error fetching directors:", error)
         toast({
@@ -124,8 +138,10 @@ export default function CreateRequestPage() {
       }
     }
 
-    if (formData.targetDepartments) {
+    if (formData.targetDepartments.length > 0) {
       fetchDirectors()
+    } else {
+      setDirectors([])
     }
   }, [formData.targetDepartments, authContext, toast])
 
@@ -150,14 +166,28 @@ export default function CreateRequestPage() {
       ...prev,
       [field]: value,
     }))
+  }
 
-    // Reset director when department changes
-    if (field === "targetDepartments") {
-      setFormData((prev) => ({
-        ...prev,
-        assignedDirectors: "",
-      }))
-    }
+  // Handle department selection
+  const handleDepartmentToggle = (departmentId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      targetDepartments: prev.targetDepartments.includes(departmentId)
+        ? prev.targetDepartments.filter((id) => id !== departmentId)
+        : [...prev.targetDepartments, departmentId],
+      // Reset director when departments change
+      assignedDirectors: "",
+    }))
+  }
+
+  // Select all departments
+  const handleSelectAllDepartments = () => {
+    const allDepartmentIds = departments.map((dept) => dept._id)
+    setFormData((prev) => ({
+      ...prev,
+      targetDepartments: prev.targetDepartments.length === departments.length ? [] : allDepartmentIds,
+      assignedDirectors: "",
+    }))
   }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -217,10 +247,10 @@ export default function CreateRequestPage() {
       return
     }
 
-    if (!formData.targetDepartments) {
+    if (formData.targetDepartments.length === 0) {
       toast({
         title: "Department required",
-        description: "Please select a target department",
+        description: "Please select at least one target department",
         variant: "destructive",
       })
       return
@@ -248,7 +278,7 @@ export default function CreateRequestPage() {
       if (response.success) {
         toast({
           title: "Request submitted successfully",
-          description: `Your request "${formData.title}" has been submitted`,
+          description: `Your request "${formData.title}" has been submitted to ${formData.targetDepartments.length} department(s)`,
         })
 
         // Upload attachments if any
@@ -285,16 +315,24 @@ export default function CreateRequestPage() {
     return priorities.find((pri) => pri.value === formData.priority)
   }
 
+  const getSelectedDepartmentNames = () => {
+    return formData.targetDepartments
+      .map((id) => departments.find((dept) => dept._id === id))
+      .filter(Boolean)
+      .map((dept) => `${dept!.name} (${dept!.code})`)
+      .join(", ")
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/requests" className="inline-flex items-center text-slate-600 hover:text-slate-900">
+          <Link href="/dashboard/requests" className="inline-flex items-center text-slate-600 hover:text-slate-900">
             <ArrowLeft className="w-4 h-4 mr-1" />
             <span>Back to Requests</span>
           </Link>
           <h1 className="text-3xl font-bold text-slate-800 mt-2">Create New Request</h1>
-          <p className="text-slate-600 mt-1">Submit a new request to the appropriate department</p>
+          <p className="text-slate-600 mt-1">Submit a new request to the appropriate department(s)</p>
         </div>
       </div>
 
@@ -348,41 +386,112 @@ export default function CreateRequestPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="department">Target Department *</Label>
-                  <Select
-                    value={formData.targetDepartments}
-                    onValueChange={(value) => handleInputChange("targetDepartments", value)}
-                    disabled={loadingDepartments}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={loadingDepartments ? "Loading departments..." : "Select department"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departments.map((dept) => (
-                        <SelectItem key={dept._id} value={dept._id}>
-                          {dept.name} ({dept.code})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {/* Multi-select Target Departments */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center space-x-2">
+                    <Building2 className="h-4 w-4" />
+                    <span>Target Departments *</span>
+                  </Label>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAllDepartments}
+                      disabled={loadingDepartments || isSubmitting}
+                    >
+                      <Users className="w-4 h-4 mr-1" />
+                      {formData.targetDepartments.length === departments.length ? "Deselect All" : "Select All"}
+                    </Button>
+                    <Badge variant="secondary" className="text-xs">
+                      {formData.targetDepartments.length} selected
+                    </Badge>
+                  </div>
                 </div>
 
+                {loadingDepartments ? (
+                  <div className="flex items-center justify-center p-8 border rounded-lg">
+                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                    <span>Loading departments...</span>
+                  </div>
+                ) : (
+                  <Card className="border-2 border-dashed">
+                    <CardContent className="p-4">
+                      <ScrollArea className="h-48">
+                        <div className="space-y-3">
+                          {departments.map((dept) => (
+                            <div
+                              key={dept._id}
+                              className="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg"
+                            >
+                              <Checkbox
+                                id={`dept-${dept._id}`}
+                                checked={formData.targetDepartments.includes(dept._id)}
+                                onCheckedChange={() => handleDepartmentToggle(dept._id)}
+                                disabled={isSubmitting}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <Label
+                                  htmlFor={`dept-${dept._id}`}
+                                  className="text-sm font-medium cursor-pointer flex items-center space-x-2"
+                                >
+                                  <Building2 className="w-4 h-4 text-blue-600" />
+                                  <span>{dept.name}</span>
+                                  <Badge variant="outline" className="text-xs">
+                                    {dept.code}
+                                  </Badge>
+                                </Label>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                      {formData.targetDepartments.length > 0 && (
+                        <div className="mt-3 pt-3 border-t">
+                          <Label className="text-sm font-medium text-muted-foreground">Selected Departments:</Label>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {formData.targetDepartments.map((deptId) => {
+                              const dept = departments.find((d) => d._id === deptId)
+                              return dept ? (
+                                <Badge key={deptId} variant="secondary" className="text-xs">
+                                  {dept.name} ({dept.code})
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-auto p-0 ml-1 hover:bg-transparent"
+                                    onClick={() => handleDepartmentToggle(deptId)}
+                                    disabled={isSubmitting}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </Button>
+                                </Badge>
+                              ) : null
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="director">Assigned Director (Optional)</Label>
                   <Select
                     value={formData.assignedDirectors}
                     onValueChange={(value) => handleInputChange("assignedDirectors", value)}
-                    disabled={!formData.targetDepartments || loadingDirectors}
+                    disabled={formData.targetDepartments.length === 0 || loadingDirectors}
                   >
                     <SelectTrigger>
                       <SelectValue
                         placeholder={
                           loadingDirectors
                             ? "Loading directors..."
-                            : !formData.targetDepartments
-                              ? "Select department first"
+                            : formData.targetDepartments.length === 0
+                              ? "Select departments first"
                               : "Select director"
                         }
                       />
@@ -391,28 +500,38 @@ export default function CreateRequestPage() {
                       {directors.map((director) => (
                         <SelectItem key={director._id} value={director._id}>
                           {director.firstName} {director.lastName}
+                          {director.position && (
+                            <span className="text-sm text-muted-foreground ml-2">({director.position})</span>
+                          )}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {!formData.targetDepartments && <p className="text-sm text-slate-500">Select a department first</p>}
+                  {formData.targetDepartments.length === 0 && (
+                    <p className="text-sm text-slate-500">Select departments first</p>
+                  )}
+                  {directors.length > 0 && (
+                    <p className="text-sm text-slate-500">
+                      {directors.length} director(s) available from selected departments
+                    </p>
+                  )}
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="priority">Priority *</Label>
-                <Select value={formData.priority} onValueChange={(value) => handleInputChange("priority", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {priorities.map((priority) => (
-                      <SelectItem key={priority.value} value={priority.value}>
-                        <span className={priority.color}>{priority.label}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-2">
+                  <Label htmlFor="priority">Priority *</Label>
+                  <Select value={formData.priority} onValueChange={(value) => handleInputChange("priority", value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {priorities.map((priority) => (
+                        <SelectItem key={priority.value} value={priority.value}>
+                          <span className={priority.color}>{priority.label}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {/* File Attachments */}
@@ -439,9 +558,7 @@ export default function CreateRequestPage() {
                   >
                     Choose Files
                   </Button>
-                  <p className="text-sm text-slate-500 mt-2">
-                    Supported formats: PDF, PNG, JPG (Max 10MB each)
-                  </p>
+                  <p className="text-sm text-slate-500 mt-2">Supported formats: PDF, PNG, JPG (Max 10MB each)</p>
                 </div>
 
                 {/* Upload Progress */}
@@ -516,12 +633,33 @@ export default function CreateRequestPage() {
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium text-slate-600">Target Department</Label>
-                  <p className="mt-1 text-slate-800">
-                    {formData.targetDepartments
-                      ? departments.find((d) => d._id === formData.targetDepartments)?.name || "Not selected"
-                      : "Not selected"}
-                  </p>
+                  <Label className="text-sm font-medium text-slate-600">Target Departments</Label>
+                  <div className="mt-1">
+                    {formData.targetDepartments.length > 0 ? (
+                      <div className="space-y-1">
+                        <p className="text-slate-800 font-medium">
+                          {formData.targetDepartments.length} department(s) selected
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {formData.targetDepartments.slice(0, 3).map((deptId) => {
+                            const dept = departments.find((d) => d._id === deptId)
+                            return dept ? (
+                              <Badge key={deptId} variant="outline" className="text-xs">
+                                {dept.code}
+                              </Badge>
+                            ) : null
+                          })}
+                          {formData.targetDepartments.length > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{formData.targetDepartments.length - 3} more
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-slate-800">Not selected</p>
+                    )}
+                  </div>
                 </div>
 
                 {formData.assignedDirectors && (
@@ -556,7 +694,7 @@ export default function CreateRequestPage() {
             <CardContent>
               <div className="space-y-3 text-sm text-slate-600">
                 <p>• Provide clear and detailed descriptions</p>
-                <p>• Select the appropriate department and priority</p>
+                <p>• Select appropriate departments and priority</p>
                 <p>• Include relevant attachments when necessary</p>
                 <p>• You can edit requests while they're pending</p>
                 <p>• Track progress in the requests dashboard</p>
@@ -567,7 +705,9 @@ export default function CreateRequestPage() {
           {/* Submit Button */}
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !formData.title || !formData.description || !formData.targetDepartments}
+            disabled={
+              isSubmitting || !formData.title || !formData.description || formData.targetDepartments.length === 0
+            }
             className="w-full bg-orange-500 hover:bg-orange-600"
             size="lg"
           >
@@ -579,7 +719,8 @@ export default function CreateRequestPage() {
             ) : (
               <>
                 <Send className="w-4 h-4 mr-2" />
-                Submit Request
+                Submit to {formData.targetDepartments.length} Department
+                {formData.targetDepartments.length !== 1 ? "s" : ""}
               </>
             )}
           </Button>
