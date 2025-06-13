@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<any[]>([])
   const [chartData, setChartData] = useState<any[]>([])
+  const [adminChartData, setAdminChartData] = useState<any[]>([])
   const [recentActivities, setRecentActivities] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -70,7 +71,18 @@ export default function Dashboard() {
                 requests: dept.count,
               })),
             ])
-            setRecentActivities(data.stats.recentActivities)
+            setAdminChartData([
+              ...data?.stats?.fileStatusCounts.map((status) => ({
+                name: status._id,
+                value: status.count,
+              })),
+              // ...data.stats.requestsByDepartment.map((dept) => ({
+              //   name: dept.departmentName,
+              //   files: 0,
+              //   requests: dept.count,
+              // })),
+            ])
+            // setRecentActivities(data.stats.recentActivities)
             break
           }
           case "director": {
@@ -97,6 +109,7 @@ export default function Dashboard() {
           }
           case "department": {
             const response = (await api.getDepartmentDashboardStats(
+              user?.id || "",
               authContext,
             )) as ApiResponse<DepartmentDashboardResponse>
             if (!response?.success || !response?.data) {
@@ -233,20 +246,14 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={[
-                      { name: "Approved", value: 45 },
-                      { name: "Pending", value: 23 },
-                      { name: "Draft", value: 18 },
-                      { name: "Rejected", value: 8 },
-                    ]}
+                    data={adminChartData}
                     cx="50%"
                     cy="50%"
                     outerRadius={80}
-                    fill="#8884d8"
                     dataKey="value"
                     label
                   >
-                    {chartData.map((entry, index) => (
+                    {adminChartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>

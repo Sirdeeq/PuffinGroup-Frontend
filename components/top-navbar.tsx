@@ -56,9 +56,9 @@ export default function TopNavbar({ user }: TopNavbarProps) {
       case "admin":
         return "Administrator"
       case "director":
-        return "Director"
+        return "General Managing Director"
       case "department":
-        return "Department User"
+        return "Department Head"
       default:
         return "User"
     }

@@ -45,13 +45,21 @@ export default function SignatureSettingsPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [signatureMethod, setSignatureMethod] = useState<"draw" | "upload" | "text">("draw")
-  const [signatureData, setSignatureData] = useState({
+  const [signatureData, setSignatureData] = useState<{
+    hasSignature: boolean;
+    signatureUrl: string;
+    signatureText: string;
+    enabled: boolean;
+    type: "text" | "draw" | "upload";
+    cloudinaryId?: string;
+    updatedAt: string;
+  }>({
     hasSignature: false,
     signatureUrl: "",
     signatureText: "",
     enabled: false,
-    type: "draw" as "draw" | "upload" | "text",
-    cloudinaryId: "",
+    type: "text" as "text",
+    cloudinaryId: undefined,
     updatedAt: "",
   })
 
@@ -325,16 +333,16 @@ export default function SignatureSettingsPage() {
       }
 
       // Send to API
-      const response = await api.updateUserSignature(payload, authContext)
+      const response = await api.updateUserSignature<SignatureResponse>(payload, authContext)
 
       if (response.success) {
         // Update local state with response data
-        if (response.signature) {
+        if (response.data) {
           setSignatureData((prev) => ({
             ...prev,
-            enabled: response.signature.enabled,
-            cloudinaryId: response.signature.cloudinaryId,
-            updatedAt: response.signature.updatedAt,
+            enabled: response.data.enabled,
+            cloudinaryId: response.data.cloudinaryId || undefined,
+            updatedAt: response.data.updatedAt,
           }))
         }
 

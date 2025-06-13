@@ -94,8 +94,8 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
       icon: Building2,
       key: "departments",
       children: [
-        { name: "Create New Department", href: "/dashboard/departments/create", icon: Plus },
-        { name: "View All Departments", href: "/dashboard/departments", icon: Eye },
+        // { name: "Create New Department", href: "/dashboard/departments/create", icon: Plus },
+        { name: "Departments", href: "/dashboard/departments", icon: Eye },
       ],
     },
     {
@@ -151,7 +151,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
   const directorNavigation: NavItem[] = [
     {
       name: "Dashboard",
-      href: "/dashboard",
+      href: "/dashboard/director",
       icon: LayoutDashboard,
       key: "dashboard",
     },
@@ -194,7 +194,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
   const departmentNavigation: NavItem[] = [
     {
       name: "Dashboard",
-      href: "/dashboard",
+      href: "/dashboard/department",
       icon: LayoutDashboard,
       key: "dashboard",
     },

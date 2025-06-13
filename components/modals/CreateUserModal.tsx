@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
 import { api } from "@/utils/api"
-import { Loader2, User, Mail, Phone, Building2, Key } from "lucide-react"
+import { Loader2, User, Mail, Phone, Building2, Key, Eye, EyeOff, RefreshCw, Copy } from "lucide-react"
 
 interface CreateUserModalProps {
   open: boolean
@@ -41,6 +41,35 @@ export function CreateUserModal({ open, onOpenChange, departments, onUserCreated
   })
 
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+
+  // Password generator function
+  const generatePassword = useCallback(() => {
+    const length = 24;
+    const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()";
+    let password = "";
+    for (let i = 0; i < length; i++) {
+      const randomIndex = Math.floor(Math.random() * charset.length);
+      password += charset.charAt(randomIndex);
+    }
+    return password;
+  }, []);
+
+  // Copy to clipboard function
+  const copyToClipboard = useCallback((text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({
+        title: "Copied!",
+        description: "Password has been copied to clipboard",
+      });
+    }).catch((err) => {
+      toast({
+        title: "Error",
+        description: "Failed to copy password",
+        variant: "destructive",
+      });
+    });
+  }, [toast]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({
@@ -226,13 +255,49 @@ export function CreateUserModal({ open, onOpenChange, departments, onUserCreated
                 <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={formData.password}
                   onChange={(e) => handleInputChange("password", e.target.value)}
-                  placeholder="Enter password"
+                  placeholder="Enter or generate password"
                   className="pl-10"
                   required
                 />
+                <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex space-x-2 pr-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="h-8 w-8"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      const newPassword = generatePassword();
+                      handleInputChange("password", newPassword);
+                      copyToClipboard(newPassword);
+                    }}
+                    className="h-8 w-8"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                  {formData.password && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => copyToClipboard(formData.password)}
+                      className="h-8 w-8"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 

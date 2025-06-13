@@ -2,7 +2,7 @@
 
 import axios, { type AxiosError } from "axios"
 import type { useAuth } from "@/contexts/AuthContext"
-import type { AdminDashboardResponse, DirectorDashboardResponse, DepartmentDashboardResponse } from "@/types/dashboard"
+export type { AdminDashboardResponse, DirectorDashboardResponse, DepartmentDashboardResponse } from "@/types/dashboard"
 
 // User interface
 interface User {
@@ -17,8 +17,8 @@ interface User {
 }
 
 // Define API endpoints
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend.onrender.com"
-// export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+// export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend.onrender.com"
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
 // Create an axios instance with default config
 const apiClient = axios.create({
@@ -276,12 +276,16 @@ export const api = {
     return ApiClient.getInstance().get("/api/auth/signature", undefined, authContext)
   },
 
-  updateUserSignature: async (data: any, authContext: ReturnType<typeof useAuth>) => {
+  updateUserSignature<T = any>(data: T, authContext: ReturnType<typeof useAuth>): Promise<ApiResponse<T>> {
     return ApiClient.getInstance().put(`/api/auth/signature`, data, authContext)
   },
 
   updateUser: async (id: string, data: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().put(`/api/users/${id}`, data, authContext)
+  },
+
+  updateUseravatar: async (id: string, data: any, authContext: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().put(`/api/users/${id}/avatar`, data, authContext)
   },
 
   deleteUser: async (id: string, authContext: ReturnType<typeof useAuth>) => {
@@ -313,12 +317,13 @@ export const api = {
   getDirectorDashboardStats: async (
     authContext: ReturnType<typeof useAuth>,
   ): Promise<ApiResponse<DirectorDashboardResponse>> => {
-    return ApiClient.getInstance().get<DirectorDashboardResponse>("/api/director/dashboard", undefined, authContext)
+    return ApiClient.getInstance().get<DirectorDashboardResponse>("/api/admin/director/dashboard", undefined, authContext)
   },
   getDepartmentDashboardStats: async (
+    id: string,
     authContext: ReturnType<typeof useAuth>,
   ): Promise<ApiResponse<DepartmentDashboardResponse>> => {
-    return ApiClient.getInstance().get<DepartmentDashboardResponse>("/api/department/dashboard", undefined, authContext)
+    return ApiClient.getInstance().get<DepartmentDashboardResponse>(`/api/admin/departments/${id}/stats`, undefined, authContext)
   },
 
   // Departments

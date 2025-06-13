@@ -20,6 +20,10 @@ export interface AdminDashboardResponse {
       departmentName: string
       count: number
     }>
+    fileStatusCounts: Array<{
+      _id: string
+      count: number
+    }>
   }
 }
 
