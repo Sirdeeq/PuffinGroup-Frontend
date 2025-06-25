@@ -132,7 +132,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
       children: [
         { name: "Admins", href: "/dashboard/users/admins", icon: Shield },
         { name: "Directors", href: "/dashboard/users/directors", icon: UserCheck },
-        { name: "Department Users", href: "/dashboard/users/departments", icon: Building2 },
+        { name: "Department Heads", href: "/dashboard/users/departments", icon: Building2 },
       ],
     },
     {

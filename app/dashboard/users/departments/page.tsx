@@ -222,7 +222,7 @@ function DepartmentUsersPageContent() {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Loading department users...</span>
+        <span className="ml-2">Loading department heads...</span>
       </div>
     )
   }
@@ -236,7 +236,7 @@ function DepartmentUsersPageContent() {
         </div>
         <Button onClick={() => setShowCreateModal(true)} className="bg-green-500 hover:bg-green-600">
           <Plus className="w-4 h-4 mr-2" />
-          Add User
+          Add Department Head
         </Button>
       </div>
 
@@ -307,7 +307,7 @@ function DepartmentUsersPageContent() {
                       </h3>
                       <Badge className="bg-green-100 text-green-800">
                         <Building2 className="w-3 h-3 mr-1" />
-                        Department User
+                        {user.position === "Department Staff" ? "Department Head" : "Department Staff"}
                       </Badge>
                     </div>
                   </div>
@@ -371,7 +371,7 @@ function DepartmentUsersPageContent() {
                       <span>{user.department.name}</span>
                     </div>
                   )}
-                  {user.position && <div className="text-sm text-slate-600">Position: {user.position}</div>}
+                  {user.position && <div className="text-sm text-slate-600">Position: {user.position === "Department Staff" ? "Department Head" : "Department Staff"}</div>}
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-600">Status:</span>
                     <Badge className={user.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
