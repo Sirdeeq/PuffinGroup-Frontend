@@ -105,7 +105,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
       children: [
         { name: "Create File", href: "/dashboard/files/create", icon: Plus },
         { name: "All Files", href: "/dashboard/files", icon: Eye },
-        { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox, badge: "3" },
+        { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox, },
         { name: "Shared Files", href: "/dashboard/files/shared", icon: Share2 },
       ],
     },
@@ -116,7 +116,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
       children: [
         { name: "Create Request", href: "/dashboard/requests/create", icon: Plus },
         { name: "All Requests", href: "/dashboard/requests", icon: Eye },
-        { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox, badge: "5" },
+        { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox },
       ],
     },
     {
@@ -159,7 +159,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
       name: "Files",
       icon: FileText,
       key: "files",
-      children: [{ name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox, badge: "3" }],
+      children: [{ name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox }],
     },
     {
       name: "Requests",
@@ -216,7 +216,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
       children: [
         { name: "Create Request", href: "/dashboard/requests/create", icon: Plus },
         { name: "My Requests", href: "/dashboard/requests", icon: Eye },
-        { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox, badge: "5" },
+        { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox },
       ],
     },
     {

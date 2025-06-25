@@ -283,7 +283,7 @@ export default function MyFilesPage() {
           <Badge variant="outline" className="text-blue-600 border-blue-200">
             {filteredFiles.length} Files
           </Badge>
-          <Link href="/files/create">
+          <Link href="/dashboard/files/create">
             <Button className="bg-blue-500 hover:bg-blue-600">
               <Plus className="w-4 h-4 mr-2" />
               Create File
