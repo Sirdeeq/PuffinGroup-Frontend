@@ -282,7 +282,7 @@ export default function LoginPage() {
                       placeholder="Enter company access code"
                       value={adminKeycode}
                       onChange={(e) => setAdminKeycode(e.target.value)}
-                      className="bg-slate-800 border-slate-700 text-white"
+                      className="bg-slate-800 border-slate-700 text-black"
                     />
                   </div>
                 </div>
@@ -397,7 +397,7 @@ export default function LoginPage() {
                     value={credentials.email}
                     onChange={(e) => updateCredentials("email", e.target.value)}
                     onKeyPress={handleKeyPress}
-                    className={`bg-${config.color}-900/30 border-${config.color}-700 text-white placeholder:text-${config.color}-300/70 pl-10`}
+                    className={`bg-${config.color}-900/30 border-${config.color}-700 text-black placeholder:text-${config.color}-300/70 pl-10`}
                     disabled={isLoading}
                   />
                   <div className="absolute left-3 top-1/2 transform -translate-y-1/2">

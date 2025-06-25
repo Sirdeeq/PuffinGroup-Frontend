@@ -149,12 +149,12 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
   ]
 
   const directorNavigation: NavItem[] = [
-    {
-      name: "Dashboard",
-      href: "/dashboard/director",
-      icon: LayoutDashboard,
-      key: "dashboard",
-    },
+    // {
+    //   name: "Dashboard",
+    //   href: "/dashboard/director",
+    //   icon: LayoutDashboard,
+    //   key: "dashboard",
+    // },
     {
       name: "Files",
       icon: FileText,
@@ -192,12 +192,12 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
   ]
 
   const departmentNavigation: NavItem[] = [
-    {
-      name: "Dashboard",
-      href: "/dashboard/department",
-      icon: LayoutDashboard,
-      key: "dashboard",
-    },
+    // {
+    //   name: "Dashboard",
+    //   href: "/dashboard/department",
+    //   icon: LayoutDashboard,
+    //   key: "dashboard",
+    // },
     {
       name: "Files",
       icon: FileText,

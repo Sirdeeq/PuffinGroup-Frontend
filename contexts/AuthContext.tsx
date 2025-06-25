@@ -82,7 +82,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsAuthenticated(true)
 
         // Force a page refresh to trigger middleware
-        window.location.href = "/dashboard"
+        if (user?.role === "admin") {
+          window.location.href = "/dashboard"
+        } else {
+          window.location.href = "/dashboard/files/inbox"
+        }
         return
       } else {
         throw new Error(response.message || "Invalid credentials")
