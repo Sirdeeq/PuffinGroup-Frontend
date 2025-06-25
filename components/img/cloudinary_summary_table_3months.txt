@@ -1,7 +1,0 @@
-📌 Summary Comparison (3-Month Pricing)
-================================================================================
-           Plan Price/mo 3-Month Price Storage Bandwidth       Video Support Users       Support
-           Plus      $25           $75  7.5 GB     15 GB      Basic MP4/WebM     5         Email
-       Advanced      $89          $267   25 GB     50 GB HLS, DASH, Full API    15      Priority
-Enterprise Lite    $249+         $747+ 100 GB+   500 GB+     Full suite, DAM     ∞ SLA + Manager
-     Enterprise   Custom        Custom       ∞         ∞  Full customization     ∞      24/7 SLA
