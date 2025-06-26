@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsAuthenticated(true)
 
         // Force a page refresh to trigger middleware
-        if (user?.role === "admin") {
+        if (response.data.user.role === "admin") {
           window.location.href = "/dashboard"
         } else {
           window.location.href = "/dashboard/files/inbox"
