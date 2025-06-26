@@ -152,7 +152,7 @@ export default function LoginPage() {
             <div className="p-4 bg-red-800/50 rounded-full w-16 h-16 flex items-center justify-center mb-4">
               <Users className="w-8 h-8 text-red-100" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">General Managing Director</h2>
+            <h2 className="text-2xl font-bold text-white mb-2">General Managing Director login</h2>
             <p className="text-red-100 mb-6">Access director dashboard for approvals and oversight</p>
             <div className="mt-auto flex items-center">
               <Button
@@ -179,7 +179,7 @@ export default function LoginPage() {
             <div className="p-4 bg-blue-800/50 rounded-full w-16 h-16 flex items-center justify-center mb-4">
               <Building2 className="w-8 h-8 text-blue-100" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Department Head</h2>
+            <h2 className="text-2xl font-bold text-white mb-2">Department login</h2>
             <p className="text-blue-100 mb-6">Access department dashboard for file and request management</p>
             <div className="mt-auto flex items-center">
               <Button
@@ -205,7 +205,7 @@ export default function LoginPage() {
             <div className="p-4 bg-slate-800/50 rounded-full w-16 h-16 flex items-center justify-center mb-4">
               <User className="w-8 h-8 text-slate-300" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Department User</h2>
+            <h2 className="text-2xl font-bold text-white mb-2">Department User login</h2>
             <p className="text-slate-300 mb-6">Access user dashboard for file and request management</p>
             <div className="mt-auto flex items-center">
               <Button
