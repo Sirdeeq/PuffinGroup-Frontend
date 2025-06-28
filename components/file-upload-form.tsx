@@ -2,18 +2,15 @@
 
 import React from "react"
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/contexts/AuthContext"
 import { api } from "@/utils/api"
 import { Upload, FileText, X, Save, Send, ImageIcon, Video, Loader2, AlertCircle, Building2, Users } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -27,14 +24,18 @@ interface Department {
   isActive: boolean
 }
 
-export default function CreateFilePage() {
-  const { toast } = useToast()
-  const authContext = useAuth()
-  const router = useRouter()
+interface FileUploadFormProps {
+  onClose: () => void
+  onSuccess: () => void
+  authContext: any
+  themeColors: any
+}
 
+export default function FileUploadForm({ onClose, onSuccess, authContext, themeColors }: FileUploadFormProps) {
+  const { toast } = useToast()
   const [formData, setFormData] = useState({
     title: "",
-    departments: [] as string[], // Changed to array for multi-select
+    departments: [] as string[],
     description: "",
     category: "document",
     priority: "medium",
@@ -48,20 +49,12 @@ export default function CreateFilePage() {
   const [loadingDepartments, setLoadingDepartments] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!authContext.loading && !authContext.isAuthenticated) {
-      router.push("/login")
-    }
-  }, [authContext.isAuthenticated, authContext.loading, router])
-
   // Fetch departments
   useEffect(() => {
     const fetchDepartments = async () => {
       try {
         setLoadingDepartments(true)
         const response = await api.getDepartments({ includeInactive: false }, authContext)
-
         if (response.success && response.data) {
           setDepartments(response.data.departments || [])
         }
@@ -182,7 +175,7 @@ export default function CreateFilePage() {
       const formDataToSend = new FormData()
 
       // Add all required fields for backend
-      formDataToSend.append("name", formData.title)  // Backend expects 'name' instead of 'title'
+      formDataToSend.append("name", formData.title) // Backend expects 'name' instead of 'title'
       formDataToSend.append("description", formData.description)
       formDataToSend.append("category", formData.category)
       formDataToSend.append("priority", formData.priority)
@@ -201,15 +194,6 @@ export default function CreateFilePage() {
 
       // Add the file with the correct field name
       formDataToSend.append("file", selectedFile, selectedFile.name)
-
-      // Log FormData contents for debugging
-      console.log("Uploading file:", {
-        fileName: selectedFile.name,
-        fileSize: selectedFile.size,
-        fileType: selectedFile.type,
-        title: formData.title,
-        departments: formData.departments,
-      })
 
       // Simulate upload progress
       setIsUploading(true)
@@ -249,16 +233,13 @@ export default function CreateFilePage() {
         setSelectedFile(null)
         setUploadProgress(0)
 
-        // Redirect to files page
-        setTimeout(() => {
-          router.push("/dashboard/files/myfiles")
-        }, 1000)
+        // Call success callback
+        onSuccess()
       } else {
         throw new Error(response.error || "Failed to submit file")
       }
     } catch (error: any) {
       console.error("File upload error:", error)
-
       let errorMessage = "Failed to submit file"
 
       // Handle specific errors
@@ -275,7 +256,7 @@ export default function CreateFilePage() {
         errorMessage = error.response.data.message
         setError(errorMessage)
       } else if (error.name === "ValidationError") {
-        const validationErrors = Object.values(error.errors).map(err => err.message)
+        const validationErrors = Object.values(error.errors).map((err: any) => err.message)
         errorMessage = validationErrors.join(". ")
         setError(errorMessage)
       }
@@ -285,7 +266,6 @@ export default function CreateFilePage() {
         description: errorMessage,
         variant: "destructive",
       })
-
       setError(errorMessage)
     } finally {
       setIsSubmitting(false)
@@ -308,27 +288,8 @@ export default function CreateFilePage() {
     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
   }
 
-  // Show loading if auth is loading
-  if (authContext.loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-      </div>
-    )
-  }
-
-  // Redirect if not authenticated
-  if (!authContext.isAuthenticated) {
-    return null
-  }
-
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-800">Create New File</h1>
-        <p className="text-slate-600 mt-1">Create and submit a new file for processing</p>
-      </div>
-
+    <div className="space-y-6">
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -339,7 +300,7 @@ export default function CreateFilePage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <FileText className="w-5 h-5 mr-2 text-orange-500" />
+            <FileText className={`w-5 h-5 mr-2 text-${themeColors.text}`} />
             File Details
           </CardTitle>
           <CardDescription>Fill in the details for your new file</CardDescription>
@@ -435,6 +396,7 @@ export default function CreateFilePage() {
                       ))}
                     </div>
                   </ScrollArea>
+
                   {formData.departments.length > 0 && (
                     <div className="mt-3 pt-3 border-t">
                       <Label className="text-sm font-medium text-muted-foreground">Selected Departments:</Label>
@@ -504,7 +466,7 @@ export default function CreateFilePage() {
             <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center">
               <Upload className="w-8 h-8 mx-auto text-slate-400 mb-2" />
               <p className="text-slate-600 mb-2">Select a file to upload</p>
-              <p className="text-sm text-slate-500 mb-4">Supports: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX (Max 10MB)</p>
+              <p className="text-sm text-slate-500 mb-4">Supports: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX (Max 15MB)</p>
               <input
                 type="file"
                 onChange={handleFileSelect}
@@ -566,6 +528,9 @@ export default function CreateFilePage() {
 
           {/* Action Buttons */}
           <div className="flex items-center justify-end space-x-4 pt-6 border-t">
+            <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </Button>
             <Button
               variant="outline"
               onClick={() => handleSubmit("draft")}
@@ -576,7 +541,7 @@ export default function CreateFilePage() {
             </Button>
             <Button
               onClick={() => handleSubmit("submit")}
-              className="bg-orange-500 hover:bg-orange-600"
+              className={`bg-${themeColors.primary} hover:bg-${themeColors.primaryHover} text-white`}
               disabled={isSubmitting || isUploading || !selectedFile || formData.departments.length === 0}
             >
               {isSubmitting ? (

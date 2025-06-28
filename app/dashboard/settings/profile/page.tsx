@@ -170,7 +170,7 @@ export default function ProfileSettingsPage() {
   const getRoleTitle = (role: string) => {
     switch (role) {
       case "department":
-        return "Department Staff"
+        return "Department Head"
       case "director":
         return "Department Director"
       case "admin":
@@ -232,7 +232,7 @@ export default function ProfileSettingsPage() {
                 {profileData.position && (
                   <Badge variant="secondary" className="text-xs">
                     <Briefcase className="w-3 h-3 mr-1" />
-                    {profileData.position}
+                    {profileData.position === "Department Staff" ? "Department Head" : profileData.position}
                   </Badge>
                 )}
 

@@ -1,0 +1,6 @@
+ddf01cf484374069dd35c28104ab9c22d74d31e9 1028172048 OllamaSetup.exe
+1a89bc7c2c183a7fe11bcc932bc5b7ecf6530c13 240214120 laragon-wamp.exe
+c715c503e256a9faac492c9170977cdedd5fe35b 154455255 mariadb-10.11.10-winx64-debugsymbols.zip
+2277bed41814162c674f4fbb0fe4586068068f50 156493548 mariadb-10.11.13-winx64-debugsymbols.zip
+fa68a203cfbb9c381579d4b2851130f6bdebb355 151855304 xampp-windows-x64-8.0.30-0-VS16-installer.exe
+902d6ce15b376ee57ef7ac94ad957d2457df6a06 157583456 xampp-windows-x64-8.2.12-0-VS16-installer.exe

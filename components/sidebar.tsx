@@ -36,7 +36,7 @@ interface SidebarProps {
     firstName: string
     lastName: string
     email: string
-    role: "admin" | "director" | "department"
+    role: "admin" | "director" | "department" | "user"
     department?: string
     position?: string
     avatar?: string
@@ -143,7 +143,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
         { name: "App Settings", href: "/dashboard/settings/app", icon: Settings },
         { name: "Profile", href: "/dashboard/settings/profile", icon: User },
         { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
-        { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
+        // { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
       ],
     },
   ]
@@ -160,7 +160,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
       icon: FileText,
       key: "files",
       children: [{ name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox },
-      // { name: "All Files", href: "/dashboard/files", icon: Eye },
+        // { name: "All Files", href: "/dashboard/files", icon: Eye },
       ],
     },
     {
@@ -168,7 +168,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
       icon: MessageSquare,
       key: "requests",
       children: [{ name: "Review Requests", href: "/dashboard/requests/review", icon: Eye },
-      // { name: "All Requests", href: "/dashboard/requests", icon: Eye },
+        // { name: "All Requests", href: "/dashboard/requests", icon: Eye },
       ],
     },
     // {
@@ -190,7 +190,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
       children: [
         { name: "Profile", href: "/dashboard/settings/profile", icon: User },
         { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
-        { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
+        // { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
       ],
     },
   ]
@@ -210,7 +210,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
         { name: "Create File", href: "/dashboard/files/create", icon: Plus },
         { name: "My Files", href: "/dashboard/files/myfiles", icon: Eye },
         { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox },
-        { name: "Shared Files", href: "/dashboard/files/shared", icon: Share2 },
+        // { name: "Shared Files", href: "/dashboard/files/shared", icon: Share2 },
       ],
     },
     {
@@ -231,6 +231,42 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
         { name: "Profile", href: "/dashboard/settings/profile", icon: User },
         { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
         { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
+        // { name: "User Management", href: "/dashboard/settings/usermanagement", icon: Users },
+      ],
+    },
+  ]
+
+  const userNavigation: NavItem[] = [
+
+    {
+      name: "Files",
+      icon: FileText,
+      key: "files",
+      children: [
+        { name: "Create File", href: "/dashboard/files/create", icon: Plus },
+        { name: "My Files", href: "/dashboard/files/myfiles", icon: Eye },
+        { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox },
+        // { name: "Shared Files", href: "/dashboard/files/shared", icon: Share2 },
+      ],
+    },
+    {
+      name: "Requests",
+      icon: MessageSquare,
+      key: "requests",
+      children: [
+        { name: "Create Request", href: "/dashboard/requests/create", icon: Plus },
+        { name: "My Requests", href: "/dashboard/requests", icon: Eye },
+        { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox },
+      ],
+    },
+    {
+      name: "Settings",
+      icon: Settings,
+      key: "settings",
+      children: [
+        { name: "Profile", href: "/dashboard/settings/profile", icon: User },
+        { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
+        // { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
       ],
     },
   ]
@@ -243,6 +279,8 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
         return directorNavigation
       case "department":
         return departmentNavigation
+      case "user":
+        return userNavigation
       default:
         return departmentNavigation
     }
@@ -288,7 +326,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
             <p className="text-xs text-slate-500 truncate" title={user.email}>
               {user.email}
             </p>
-            {user.position && <p className="text-xs text-slate-400 truncate">{user.position}</p>}
+            {user.position && <p className="text-xs text-slate-400 truncate">{user.position === "Department Staff" ? "Department Head" : user.position}</p>}
           </div>
         </div>
       </div>

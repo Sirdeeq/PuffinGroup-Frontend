@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -35,6 +36,7 @@ export default function LoginPage() {
   const { login, isAuthenticated, loading } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
+
   const [credentials, setCredentials] = useState<LoginCredentials>({
     email: "",
     password: "",
@@ -57,10 +59,10 @@ export default function LoginPage() {
   // Show loading spinner while checking authentication
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
         <div className="flex flex-col items-center">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-          <p className="mt-4 text-gray-700">Checking authentication status...</p>
+          <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
+          <p className="mt-4 text-slate-300">Checking authentication status...</p>
         </div>
       </div>
     )
@@ -138,26 +140,26 @@ export default function LoginPage() {
         <div className="flex justify-center mb-6">
           <Logo size="lg" showText={true} />
         </div>
-        <h1 className="text-4xl font-bold text-gray-800 mb-3">Welcome to the Document Management System</h1>
-        <p className="text-gray-600 text-lg">Please select your role to continue</p>
+        <h1 className="text-4xl font-bold text-white mb-3">Welcome to the Document Management System</h1>
+        <p className="text-slate-300 text-lg">Please select your role to continue</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-        {/* Board of Directors Option */}
+        {/* Director Option */}
         <div
           onClick={() => setSelectedRole("director")}
-          className="group relative overflow-hidden rounded-2xl bg-white border-2 border-red-200 hover:border-red-300 p-1 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl shadow-lg"
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-900/90 to-red-700 p-1 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-red-100 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-red-500/20 to-red-700/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
           <div className="relative z-10 p-6 flex flex-col h-full">
-            <div className="p-4 bg-red-100 rounded-full w-16 h-16 flex items-center justify-center mb-4">
-              <Users className="w-8 h-8 text-red-600" />
+            <div className="p-4 bg-red-800/50 rounded-full w-16 h-16 flex items-center justify-center mb-4">
+              <Users className="w-8 h-8 text-red-100" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Board of Directors</h2>
-            <p className="text-gray-600 mb-6">Access director dashboard for approvals and oversight</p>
+            <h2 className="text-2xl font-bold text-white mb-2">General Managing Director login</h2>
+            <p className="text-red-100 mb-6">Access director dashboard for approvals and oversight</p>
             <div className="mt-auto flex items-center">
               <Button
-                className="bg-red-600 text-white hover:bg-red-700 flex items-center gap-2 px-5 py-6 text-base font-medium"
+                className="bg-white text-red-900 hover:bg-red-100 flex items-center gap-2 px-5 py-6 text-base font-medium"
                 onClick={(e) => {
                   e.stopPropagation()
                   setSelectedRole("director")
@@ -173,18 +175,18 @@ export default function LoginPage() {
         {/* Department Head Option */}
         <div
           onClick={() => setSelectedRole("department")}
-          className="group relative overflow-hidden rounded-2xl bg-white border-2 border-blue-200 hover:border-blue-300 p-1 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl shadow-lg"
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-900/90 to-blue-700 p-1 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-blue-100 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-blue-700/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
           <div className="relative z-10 p-6 flex flex-col h-full">
-            <div className="p-4 bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mb-4">
-              <Building2 className="w-8 h-8 text-blue-600" />
+            <div className="p-4 bg-blue-800/50 rounded-full w-16 h-16 flex items-center justify-center mb-4">
+              <Building2 className="w-8 h-8 text-blue-100" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Department Head</h2>
-            <p className="text-gray-600 mb-6">Access department dashboard for file and request management</p>
+            <h2 className="text-2xl font-bold text-white mb-2">Department login</h2>
+            <p className="text-blue-100 mb-6">Access department dashboard for file and request management</p>
             <div className="mt-auto flex items-center">
               <Button
-                className="bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 px-5 py-6 text-base font-medium"
+                className="bg-white text-blue-900 hover:bg-blue-100 flex items-center gap-2 px-5 py-6 text-base font-medium"
                 onClick={(e) => {
                   e.stopPropagation()
                   setSelectedRole("department")
@@ -197,48 +199,43 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Department User Option - Now Active */}
-        <div
-          onClick={() => setSelectedRole("user")}
-          className="group relative overflow-hidden rounded-2xl bg-white border-2 border-green-200 hover:border-green-300 p-1 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl shadow-lg"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-green-100 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <div className="relative z-10 p-6 flex flex-col h-full">
-            <div className="p-4 bg-green-100 rounded-full w-16 h-16 flex items-center justify-center mb-4">
-              <User className="w-8 h-8 text-green-600" />
+        {/* Department User Option - Coming Soon */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800/90 to-slate-700 p-1 opacity-80">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="bg-slate-900/80 px-4 py-2 rounded-lg text-white font-bold text-lg">COMING SOON</div>
+          </div>
+          <div className="relative z-10 p-6 flex flex-col h-full filter blur-[1px]">
+            <div className="p-4 bg-slate-800/50 rounded-full w-16 h-16 flex items-center justify-center mb-4">
+              <User className="w-8 h-8 text-slate-300" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Department User</h2>
-            <p className="text-gray-600 mb-6">Access user dashboard for file and request management</p>
+            <h2 className="text-2xl font-bold text-white mb-2">Department User login</h2>
+            <p className="text-slate-300 mb-6">Access user dashboard for file and request management</p>
             <div className="mt-auto flex items-center">
               <Button
-                className="bg-green-600 text-white hover:bg-green-700 flex items-center gap-2 px-5 py-6 text-base font-medium"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setSelectedRole("user")
-                }}
+                disabled
+                className="bg-white/50 text-slate-900 flex items-center gap-2 px-5 py-6 text-base font-medium"
               >
-                Login as Department User
-                <ChevronRight className="w-5 h-5" />
+                Coming Soon
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Admin Access Portal */}
+        {/* Hidden Admin Access */}
         <div
           onClick={() => setShowAdminAccess(true)}
-          className="group relative overflow-hidden rounded-2xl bg-white border-2 border-gray-200 hover:border-gray-300 p-1 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl shadow-lg"
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-800 p-1 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-700/20 to-slate-800/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
           <div className="relative z-10 p-6 flex flex-col h-full">
-            <div className="p-4 bg-gray-100 rounded-full w-16 h-16 flex items-center justify-center mb-4">
-              <Key className="w-8 h-8 text-gray-600" />
+            <div className="p-4 bg-slate-800/50 rounded-full w-16 h-16 flex items-center justify-center mb-4">
+              <Key className="w-8 h-8 text-slate-300" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Secure Access Portal</h2>
-            <p className="text-gray-600 mb-6">Restricted access for authorized personnel only</p>
+            <h2 className="text-2xl font-bold text-white mb-2">Secure Access Portal</h2>
+            <p className="text-slate-300 mb-6">Restricted access for authorized personnel only</p>
             <div className="mt-auto flex items-center">
               <Button
-                className="bg-gray-600 text-white hover:bg-gray-700 flex items-center gap-2 px-5 py-6 text-base font-medium border border-gray-300"
+                className="bg-white/10 text-white hover:bg-white/20 flex items-center gap-2 px-5 py-6 text-base font-medium border border-white/20"
                 onClick={(e) => {
                   e.stopPropagation()
                   setShowAdminAccess(true)
@@ -254,10 +251,10 @@ export default function LoginPage() {
 
       {/* Admin Access Modal */}
       {showAdminAccess && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-gray-200 rounded-xl w-full max-w-md p-6 shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md p-6 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <ShieldAlert className="w-5 h-5 text-orange-500" />
                 Restricted Access
               </h3>
@@ -269,7 +266,7 @@ export default function LoginPage() {
                   setAdminAccessStep(0)
                   setAdminKeycode("")
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-slate-400 hover:text-white"
               >
                 <X className="w-5 h-5" />
               </Button>
@@ -278,7 +275,7 @@ export default function LoginPage() {
             {adminAccessStep === 0 && (
               <>
                 <div className="mb-6">
-                  <p className="text-gray-600 mb-4">
+                  <p className="text-slate-300 mb-4">
                     This area is restricted to authorized personnel only. Please enter your company access code to
                     continue.
                   </p>
@@ -288,7 +285,7 @@ export default function LoginPage() {
                       placeholder="Enter company access code"
                       value={adminKeycode}
                       onChange={(e) => setAdminKeycode(e.target.value)}
-                      className="bg-gray-50 border-gray-300 text-gray-800"
+                      className="bg-slate-800 border-slate-700 text-black"
                     />
                   </div>
                 </div>
@@ -303,7 +300,7 @@ export default function LoginPage() {
             {adminAccessStep === 2 && (
               <>
                 <div className="mb-6">
-                  <p className="text-green-600 mb-4 flex items-center gap-2">
+                  <p className="text-green-400 mb-4 flex items-center gap-2">
                     <span className="w-4 h-4 rounded-full bg-green-500"></span>
                     Access granted. Please proceed to administrator login.
                   </p>
@@ -328,12 +325,12 @@ export default function LoginPage() {
   const renderLoginForm = () => {
     const roleConfig = {
       director: {
-        title: "Board of Directors",
+        title: "General Managing Director",
         description: "Access director dashboard for approvals and oversight",
         icon: Users,
         color: "red",
         placeholder: "director@company.com",
-        bgGradient: "from-red-500 to-red-600",
+        bgGradient: "from-red-900 to-red-700",
       },
       department: {
         title: "Department Head",
@@ -341,7 +338,7 @@ export default function LoginPage() {
         icon: Building2,
         color: "blue",
         placeholder: "head@department.com",
-        bgGradient: "from-blue-500 to-blue-600",
+        bgGradient: "from-blue-900 to-blue-700",
       },
       admin: {
         title: "System Administrator",
@@ -349,7 +346,7 @@ export default function LoginPage() {
         icon: ShieldAlert,
         color: "orange",
         placeholder: "RC-ADMIN-2025",
-        bgGradient: "from-orange-500 to-orange-600",
+        bgGradient: "from-orange-900 to-orange-700",
       },
       user: {
         title: "Department User",
@@ -357,7 +354,7 @@ export default function LoginPage() {
         icon: User,
         color: "green",
         placeholder: "user@company.com",
-        bgGradient: "from-green-500 to-green-600",
+        bgGradient: "from-green-900 to-green-700",
       },
     }
 
@@ -369,24 +366,24 @@ export default function LoginPage() {
     return (
       <div className="w-full max-w-md px-4">
         <div className="mb-8 flex justify-center">
-          <Logo size="lg" showText={false} />
+          <Logo size="xxxxxl" showText={false} />
         </div>
 
-        <div className="rounded-2xl overflow-hidden bg-white shadow-2xl border border-gray-200">
-          <div className={`p-8 bg-gradient-to-br ${config.bgGradient}`}>
+        <div className={`rounded-2xl overflow-hidden bg-gradient-to-br ${config.bgGradient} shadow-2xl`}>
+          <div className="p-8">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-white/20 rounded-full">
-                <IconComponent className="w-6 h-6 text-white" />
+              <div className={`p-3 bg-${config.color}-800/50 rounded-full`}>
+                <IconComponent className={`w-6 h-6 text-${config.color}-100`} />
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-white">{config.title}</h2>
-                <p className="text-white/90 text-sm">{config.description}</p>
+                <p className={`text-${config.color}-100 text-sm`}>{config.description}</p>
               </div>
             </div>
 
             {error && (
-              <div className="mb-6 p-3 bg-red-100 border border-red-300 rounded-lg flex items-center gap-2 text-red-800">
-                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              <div className="mb-6 p-3 bg-red-900/50 border border-red-800 rounded-lg flex items-center gap-2 text-red-100">
+                <AlertCircle className="w-5 h-5 text-red-300 flex-shrink-0" />
                 <p className="text-sm">{error}</p>
               </div>
             )}
@@ -403,14 +400,14 @@ export default function LoginPage() {
                     value={credentials.email}
                     onChange={(e) => updateCredentials("email", e.target.value)}
                     onKeyPress={handleKeyPress}
-                    className="bg-white/90 border-white/50 text-gray-800 placeholder:text-gray-500 pl-10"
+                    className={`bg-${config.color}-900/30 border-${config.color}-700 text-black placeholder:text-${config.color}-300/70 pl-10`}
                     disabled={isLoading}
                   />
                   <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
                     {selectedRole === "admin" ? (
-                      <Key className="w-4 h-4 text-gray-500" />
+                      <Key className="w-4 h-4 text-white/50" />
                     ) : (
-                      <User className="w-4 h-4 text-gray-500" />
+                      <User className="w-4 h-4 text-white/50" />
                     )}
                   </div>
                 </div>
@@ -424,19 +421,16 @@ export default function LoginPage() {
                     value={credentials.password}
                     onChange={(e) => updateCredentials("password", e.target.value)}
                     onKeyPress={handleKeyPress}
-                    className="bg-white/90 border-white/50 text-gray-800 pl-10 pr-10"
+                    className={`bg-${config.color}-900/30 border-${config.color}-700 text-black pl-10`}
                     disabled={isLoading}
                   />
-                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-                    <Lock className="w-4 h-4 text-gray-500" />
-                  </div>
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                     <button
                       type="button"
-                      className="text-gray-500 hover:text-gray-700"
+                      className="text-white/50 hover:text-white"
                       onClick={() => setShowPassword((prev) => !prev)}
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showPassword ? <EyeOff className="w-4 h-4 text-black" /> : <Eye className="w-4 h-4 text-black" />}
                     </button>
                   </div>
                 </div>
@@ -444,7 +438,7 @@ export default function LoginPage() {
 
               <Button
                 onClick={handleLogin}
-                className="w-full bg-white text-gray-800 hover:bg-gray-100 py-6 font-medium"
+                className={`w-full bg-white text-${config.color}-900 hover:bg-${config.color}-100 py-6`}
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -462,11 +456,11 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="p-4 bg-gray-50 flex justify-between items-center">
-            <Button variant="ghost" className="text-gray-600 hover:bg-gray-100" onClick={() => setSelectedRole(null)}>
+          <div className={`p-4 bg-${config.color}-900/50 flex justify-between items-center`}>
+            <Button variant="ghost" className="text-white hover:bg-white/10" onClick={() => setSelectedRole(null)}>
               Back to Role Selection
             </Button>
-            <p className="text-gray-500 text-xs">Secure Login</p>
+            <p className="text-white/50 text-xs">Secure Login</p>
           </div>
         </div>
       </div>
@@ -474,7 +468,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-16">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center py-16">
       {selectedRole ? renderLoginForm() : renderRoleSelection()}
     </div>
   )

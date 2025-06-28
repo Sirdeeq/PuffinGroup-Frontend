@@ -255,7 +255,31 @@ export const api = {
   },
 
   registerDepartmentUser: async (userData: any, authContext: ReturnType<typeof useAuth>) => {
-    return ApiClient.getInstance().post("/api/auth/register-department-user", userData, authContext)
+    return ApiClient.getInstance().post("/api/auth/department/register", userData, authContext)
+  },
+
+  getDepartmentUsers: async (authContext: any) => {
+    return ApiClient.getInstance().get("/api/auth/department/users", undefined, authContext)
+  },
+
+  registerUserUnderDepartment: async (userData: any, authContext: any) => {
+    return ApiClient.getInstance().post("/api/auth/department/register", userData, authContext)
+  },
+
+  updateDepartmentUser: async (userId: string, userData: any, authContext: any) => {
+    return ApiClient.getInstance().put(`/api/auth/department/users/${userId}`, userData, authContext)
+  },
+
+  changeDepartmentUserPassword: async (userId: string, passwordData: any, authContext: any) => {
+    return ApiClient.getInstance().put(`/api/auth/department/users/${userId}/password`, passwordData, authContext)
+  },
+
+  toggleDepartmentUserStatus: async (userId: string, statusData: any, authContext: any) => {
+    return ApiClient.getInstance().put(`/api/auth/department/users/${userId}/status`, statusData, authContext)
+  },
+
+  deleteDepartmentUser: async (userId: string, authContext: any) => {
+    return ApiClient.getInstance().delete(`/api/auth/department/users/${userId}`, authContext)
   },
 
   // User management
