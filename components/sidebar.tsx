@@ -231,7 +231,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
         { name: "Profile", href: "/dashboard/settings/profile", icon: User },
         { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
         { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
-        // { name: "User Management", href: "/dashboard/settings/usermanagement", icon: Users },
+        { name: "User Management", href: "/dashboard/settings/usermanagement", icon: Users },
       ],
     },
   ]

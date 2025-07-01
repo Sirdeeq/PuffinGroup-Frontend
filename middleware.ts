@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const token = request.cookies.get("token")?.value || ""
   const path = request.nextUrl.pathname
 
@@ -16,13 +16,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  // If user is logged in and tries to access login page, redirect to dashboard
+  // If user is logged in and tries to access login page, redirect to appropriate section
   if (isPublicPath && token && path === "/login") {
+    // We don't need to check auth here since we already have token
     return NextResponse.redirect(new URL("/dashboard", request.url))
   }
 
-  // If user is logged in and on root path, redirect to dashboard
+  // If user is logged in and on root path, redirect to appropriate section
   if (path === "/" && token) {
+    // We don't need to check auth here since we already have token
     return NextResponse.redirect(new URL("/dashboard", request.url))
   }
 

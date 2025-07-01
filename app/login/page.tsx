@@ -47,12 +47,13 @@ export default function LoginPage() {
   const [adminAccessStep, setAdminAccessStep] = useState(0)
   const [showPassword, setShowPassword] = useState(false)
 
-  // If already authenticated, redirect
+  // If already authenticated, redirect to appropriate section based on role
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      router.push("/dashboard")
+      const redirectPath = selectedRole === "admin" ? "/dashboard" : "/dashboard/files/myfiles"
+      router.push(redirectPath)
     }
-  }, [isAuthenticated, loading, router])
+  }, [isAuthenticated, loading, router, selectedRole])
 
   // Show loading spinner while checking authentication
   if (loading) {

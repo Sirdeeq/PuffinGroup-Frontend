@@ -1,7 +1,7 @@
 import { headers } from "next/headers"
 
 export async function getServerAuth() {
-  const headersList = headers()
+  const headersList = await headers()
   const authHeader = headersList.get("authorization")
   
   if (!authHeader) {
