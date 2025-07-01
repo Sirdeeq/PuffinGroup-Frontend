@@ -119,12 +119,12 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
         { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox },
       ],
     },
-    {
-      name: "Reports",
-      href: "/dashboard/reports",
-      icon: BarChart3,
-      key: "reports",
-    },
+    // {
+    //   name: "Reports",
+    //   href: "/dashboard/reports",
+    //   icon: BarChart3,
+    //   key: "reports",
+    // },
     {
       name: "User Management",
       icon: Users,
@@ -207,7 +207,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
       icon: FileText,
       key: "files",
       children: [
-        { name: "Create File", href: "/dashboard/files/create", icon: Plus },
+        // { name: "Create File", href: "/dashboard/files/create", icon: Plus },
         { name: "My Files", href: "/dashboard/files/myfiles", icon: Eye },
         { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox },
         // { name: "Shared Files", href: "/dashboard/files/shared", icon: Share2 },
@@ -243,7 +243,7 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
       icon: FileText,
       key: "files",
       children: [
-        { name: "Create File", href: "/dashboard/files/create", icon: Plus },
+        // { name: "Create File", href: "/dashboard/files/create", icon: Plus },
         { name: "My Files", href: "/dashboard/files/myfiles", icon: Eye },
         { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox },
         // { name: "Shared Files", href: "/dashboard/files/shared", icon: Share2 },
