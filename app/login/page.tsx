@@ -23,6 +23,7 @@ import {
   EyeOff,
   Eye,
 } from "lucide-react"
+import { CheckInModal } from "@/components/attendance/check-in-modal"
 
 interface LoginCredentials {
   email: string
@@ -32,7 +33,7 @@ interface LoginCredentials {
 type RoleType = "director" | "department" | "admin" | "user"
 
 export default function LoginPage() {
-  const { login, isAuthenticated, loading } = useAuth()
+  const { login, isAuthenticated, loading, user } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
   const [credentials, setCredentials] = useState<LoginCredentials>({
@@ -46,12 +47,28 @@ export default function LoginPage() {
   const [adminKeycode, setAdminKeycode] = useState("")
   const [adminAccessStep, setAdminAccessStep] = useState(0)
   const [showPassword, setShowPassword] = useState(false)
+  const [showCheckInModal, setShowCheckInModal] = useState(false)
 
-  // If already authenticated, redirect to appropriate section based on role
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      const redirectPath = selectedRole === "admin" ? "/dashboard" : "/dashboard/files/myfiles"
-      router.push(redirectPath)
+      // Get user role from auth context or localStorage
+      const userRole = localStorage.getItem("userRole") || selectedRole
+
+      // Show check-in modal for regular users, skip for admin and director
+      if (userRole !== "admin" && userRole !== "director") {
+        setShowCheckInModal(true)
+      } else {
+        // Role-based redirect logic
+        let redirectPath = "/dashboard/files/myfiles" // default for users
+
+        if (userRole === "admin") {
+          redirectPath = "/dashboard"
+        } else if (userRole === "director") {
+          redirectPath = "/dashboard/files/inbox"
+        }
+
+        router.push(redirectPath)
+      }
     }
   }, [isAuthenticated, loading, router, selectedRole])
 
@@ -72,6 +89,40 @@ export default function LoginPage() {
     return null
   }
 
+  // const handleLogin = async () => {
+  //   try {
+  //     setIsLoading(true)
+  //     setError(null)
+
+  //     // Validate inputs
+  //     if (!credentials.email || !credentials.password) {
+  //       throw new Error("Please fill in all fields")
+  //     }
+
+  //     await login({
+  //       email: credentials.email,
+  //       password: credentials.password,
+  //       role: selectedRole || "department",
+  //     })
+
+  //     toast({
+  //       title: "Login successful",
+  //       description: "Redirecting to dashboard...",
+  //     })
+  //   } catch (err: any) {
+  //     const errorMessage = err instanceof Error ? err.message : "Login failed"
+  //     setError(errorMessage)
+  //     toast({
+  //       title: "Login Failed",
+  //       description: errorMessage,
+  //       variant: "destructive",
+  //     })
+  //   } finally {
+  //     setIsLoading(false)
+  //   }
+  // }
+
+
   const handleLogin = async () => {
     try {
       setIsLoading(true)
@@ -82,15 +133,20 @@ export default function LoginPage() {
         throw new Error("Please fill in all fields")
       }
 
-      await login({
+      const response = await login({
         email: credentials.email,
         password: credentials.password,
         role: selectedRole || "department",
       })
 
+      // Store user role for redirect logic
+      if (response?.data?.user?.role) {
+        localStorage.setItem("userRole", response.data.user.role)
+      }
+
       toast({
         title: "Login successful",
-        description: "Redirecting to dashboard...",
+        description: "Please check in before proceeding...",
       })
     } catch (err: any) {
       const errorMessage = err instanceof Error ? err.message : "Login failed"
@@ -477,6 +533,23 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-16">
       {selectedRole ? renderLoginForm() : renderRoleSelection()}
+      <CheckInModal
+        isOpen={showCheckInModal}
+        onClose={() => setShowCheckInModal(false)}
+        onSuccess={() => {
+          // After successful check-in, redirect to appropriate dashboard
+          const userRole = localStorage.getItem("userRole") || selectedRole
+          let redirectPath = "/dashboard/files/myfiles"
+
+          if (userRole === "admin") {
+            redirectPath = "/dashboard"
+          } else if (userRole === "director") {
+            redirectPath = "/dashboard/files/inbox"
+          }
+
+          router.push(redirectPath)
+        }}
+      />
     </div>
   )
 }

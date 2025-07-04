@@ -1,8 +1,8 @@
 "use client"
 
 import axios, { type AxiosError } from "axios"
+import type { AdminDashboardResponse, DirectorDashboardResponse, DepartmentDashboardResponse } from "@/types/dashboard"
 import type { useAuth } from "@/contexts/AuthContext"
-export type { AdminDashboardResponse, DirectorDashboardResponse, DepartmentDashboardResponse } from "@/types/dashboard"
 
 // User interface
 interface User {
@@ -35,14 +35,12 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`
       }
     }
-
     // Don't set Content-Type for FormData, let browser set it with boundary
     if (config.data instanceof FormData) {
       delete config.headers["Content-Type"]
     } else {
       config.headers["Content-Type"] = "application/json"
     }
-
     return config
   },
   (error) => {
@@ -59,7 +57,6 @@ apiClient.interceptors.response.use(
       data: error.response?.data,
       message: error.message,
     })
-
     if (error.response?.status === 401) {
       // Handle unauthorized access
       if (typeof window !== "undefined") {
@@ -95,7 +92,7 @@ export interface ApiResponse<T> {
 export class ApiClient {
   private static instance: ApiClient
 
-  private constructor() { }
+  private constructor() {}
 
   // Singleton pattern to ensure only one instance
   public static getInstance(): ApiClient {
@@ -120,7 +117,6 @@ export class ApiClient {
         data,
         params,
       })
-
       return {
         success: true,
         data: response.data,
@@ -132,7 +128,6 @@ export class ApiClient {
         (apiError.response?.data as any)?.error ||
         apiError.message ||
         "An error occurred"
-
       throw new ApiError(errorMessage, apiError.response?.status, apiError.response?.data)
     }
   }
@@ -166,7 +161,6 @@ export class ApiClient {
   ): Promise<ApiResponse<T>> {
     try {
       console.log("Uploading FormData to:", endpoint)
-
       // Log FormData contents for debugging
       for (const [key, value] of formData.entries()) {
         if (value instanceof File) {
@@ -188,7 +182,6 @@ export class ApiClient {
       })
 
       console.log("Upload response:", response.data)
-
       return {
         success: true,
         data: response.data,
@@ -200,13 +193,11 @@ export class ApiClient {
         data: apiError.response?.data,
         message: apiError.message,
       })
-
       const errorMessage =
         (apiError.response?.data as any)?.message ||
         (apiError.response?.data as any)?.error ||
         apiError.message ||
         "Upload failed"
-
       throw new ApiError(errorMessage, apiError.response?.status, apiError.response?.data)
     }
   }
@@ -222,7 +213,6 @@ export class ApiClient {
         params,
         responseType: "blob",
       })
-
       return {
         success: true,
         data: response.data,
@@ -237,6 +227,7 @@ export class ApiClient {
     }
   }
 }
+
 // Create a simple API service that uses the ApiClient
 export const api = {
   // Authentication
@@ -295,6 +286,7 @@ export const api = {
   getUsersByRole: async (role: string, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get(`/api/users/role/${role}`, undefined, authContext)
   },
+
   // Check if user has signature
   getUserSignature: async (authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get("/api/auth/signature", undefined, authContext)
@@ -338,40 +330,54 @@ export const api = {
   ): Promise<ApiResponse<AdminDashboardResponse>> => {
     return ApiClient.getInstance().get<AdminDashboardResponse>("/api/admin/dashboard", undefined, authContext)
   },
+
   getDirectorDashboardStats: async (
     authContext: ReturnType<typeof useAuth>,
   ): Promise<ApiResponse<DirectorDashboardResponse>> => {
-    return ApiClient.getInstance().get<DirectorDashboardResponse>("/api/admin/director/dashboard", undefined, authContext)
+    return ApiClient.getInstance().get<DirectorDashboardResponse>(
+      "/api/admin/director/dashboard",
+      undefined,
+      authContext,
+    )
   },
+
   getDepartmentDashboardStats: async (
     id: string,
     authContext: ReturnType<typeof useAuth>,
   ): Promise<ApiResponse<DepartmentDashboardResponse>> => {
-    return ApiClient.getInstance().get<DepartmentDashboardResponse>(`/api/admin/departments/${id}/stats`, undefined, authContext)
+    return ApiClient.getInstance().get<DepartmentDashboardResponse>(
+      `/api/admin/departments/${id}/stats`,
+      undefined,
+      authContext,
+    )
   },
 
   // Departments
   getDepartments: async (params?: { includeInactive?: boolean }, authContext?: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get("/api/departments", params, authContext)
   },
+
   createDepartment: async (data: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().post("/api/departments", data, authContext)
   },
+
   getUnassignedDirectors: async (authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get("/api/users/directors/unassigned", undefined, authContext)
   },
+
   // Get all directors
-  getAllDirectors
-    : async (authContext: ReturnType<typeof useAuth>) => {
-      return ApiClient.getInstance().get("/api/users/directors", undefined, authContext)
-    }
-  ,
+  getAllDirectors: async (authContext: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().get("/api/users/directors", undefined, authContext)
+  },
 
   // Assign director to department
-  assignDirectorToDepartment: async (departmentId: string, directorId: string, authContext: ReturnType<typeof useAuth>) => {
+  assignDirectorToDepartment: async (
+    departmentId: string,
+    directorId: string,
+    authContext: ReturnType<typeof useAuth>,
+  ) => {
     return ApiClient.getInstance().put(`/api/departments/${departmentId}/assign-director`, { directorId }, authContext)
-  }
-  ,
+  },
 
   updateDepartment: async (id: string, data: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().put(`/api/departments/${id}`, data, authContext)
@@ -381,31 +387,39 @@ export const api = {
   uploadFile: async (formData: FormData, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().uploadFormData("/api/files", formData, authContext)
   },
+
   getFiles: async (
     params?: { status?: string; department?: string; category?: string },
     authContext?: ReturnType<typeof useAuth>,
   ) => {
     return ApiClient.getInstance().get("/api/files", params, authContext)
   },
+
   getFile: async (id: string, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get(`/api/files/${id}`, undefined, authContext)
   },
+
   updateFile: async (id: string, data: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().put(`/api/files/${id}`, data, authContext)
   },
+
   deleteFile: async (id: string, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().delete(`/api/files/${id}`, authContext)
   },
+
   shareFile: async (id: string, shareData: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().post(`/api/files/${id}/share`, shareData, authContext)
   },
+
   uploadNewVersion: async (id: string, formData: FormData, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().uploadFormData(`/api/files/${id}/version`, formData, authContext)
   },
+
   // Add signature to file
   addSignature: async (id: string, signatureData: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().post(`/api/files/${id}/signature`, signatureData, authContext)
   },
+
   // Add the corrected inbox files method
   getInboxFiles: async (authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get("/api/files/inbox", undefined, authContext)
@@ -415,6 +429,7 @@ export const api = {
   getMyFiles: async (params?: { status?: string }, authContext?: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get("/api/files/myfiles", params, authContext)
   },
+
   // File Actions
   takeFileAction: async (id: string, actionData: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().put(`/api/files/${id}/action`, actionData, authContext)
@@ -424,30 +439,39 @@ export const api = {
   createRequest: async (data: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().post("/api/requests", data, authContext)
   },
+
   getRequests: async (authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get("/api/requests", undefined, authContext)
   },
+
   getIncomingRequests: async (authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get("/api/requests/incoming", undefined, authContext)
   },
+
   getRequest: async (id: string, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get(`/api/requests/${id}`, undefined, authContext)
   },
+
   getReviewedRequests: async (authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get("/api/requests/reviewed", undefined, authContext)
   },
+
   updateRequest: async (id: string, data: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().put(`/api/requests/${id}`, data, authContext)
   },
+
   deleteRequest: async (id: string, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().delete(`/api/requests/${id}`, authContext)
   },
+
   takeRequestAction: async (id: string, actionData: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().put(`/api/requests/${id}/action`, actionData, authContext)
   },
+
   addRequestComment: async (id: string, commentData: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().post(`/api/requests/${id}/comments`, commentData, authContext)
   },
+
   getDirectorsByDepartment: async (departmentId: string, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get(`/api/departments/${departmentId}/directors`, undefined, authContext)
   },
@@ -456,23 +480,50 @@ export const api = {
   createReport: async (data: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().post("/api/reports", data, authContext)
   },
+
   getReports: async (authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get("/api/reports", undefined, authContext)
   },
+
   getReport: async (id: string, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get(`/api/reports/${id}`, undefined, authContext)
   },
+
   updateReport: async (id: string, data: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().put(`/api/reports/${id}`, data, authContext)
   },
+
   deleteReport: async (id: string, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().delete(`/api/reports/${id}`, authContext)
   },
+
   getReportData: async (params: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get("/api/reports/data", params, authContext)
   },
+
   generateReport: async (params: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().downloadFile("/api/reports/generate", params, authContext)
   },
 
+  // Attendance
+  checkIn: async (data: any, authContext: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().post("/api/attendance/check-in", data, authContext)
+  },
+
+  checkOut: async (data: any, authContext: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().post("/api/attendance/check-out", data, authContext)
+  },
+
+  getAttendanceHistory: async (params?: any, authContext?: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().get("/api/attendance/history", params, authContext)
+  },
+
+  // Admin attendance routes
+  getDailyAttendance: async (params?: any, authContext?: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().get("/api/attendance/admin/daily", params, authContext)
+  },
+
+  getAttendanceByDateRange: async (params?: any, authContext?: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().get("/api/attendance/admin/range", params, authContext)
+  },
 }

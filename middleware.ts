@@ -16,16 +16,57 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  // If user is logged in and tries to access login page, redirect to appropriate section
+  // If user is logged in and tries to access login page, redirect based on role
   if (isPublicPath && token && path === "/login") {
-    // We don't need to check auth here since we already have token
-    return NextResponse.redirect(new URL("/dashboard", request.url))
+    // Try to get user role from cookie or default redirect
+    const userRole = request.cookies.get("userRole")?.value
+
+    let redirectPath = "/dashboard/files/myfiles" // default
+
+    if (userRole === "admin") {
+      redirectPath = "/dashboard"
+    } else if (userRole === "director") {
+      redirectPath = "/dashboard/files/inbox"
+    } else if (userRole === "department") {
+      redirectPath = "/dashboard/files/myfiles"
+    }
+
+    return NextResponse.redirect(new URL(redirectPath, request.url))
   }
 
-  // If user is logged in and on root path, redirect to appropriate section
+  // If user is logged in and on root path, redirect based on role
   if (path === "/" && token) {
-    // We don't need to check auth here since we already have token
-    return NextResponse.redirect(new URL("/dashboard", request.url))
+    const userRole = request.cookies.get("userRole")?.value
+
+    let redirectPath = "/dashboard/files/myfiles" // default
+
+    if (userRole === "admin") {
+      redirectPath = "/dashboard"
+    } else if (userRole === "director") {
+      redirectPath = "/dashboard/files/inbox"
+    } else if (userRole === "department") {
+      redirectPath = "/dashboard/files/myfiles"
+    }
+
+    return NextResponse.redirect(new URL(redirectPath, request.url))
+  }
+
+  // Protect dashboard route for non-admin users
+  if (path === "/dashboard" && token) {
+    const userRole = request.cookies.get("userRole")?.value
+
+    if (userRole !== "admin") {
+      // Redirect non-admin users to their appropriate section
+      let redirectPath = "/dashboard/files/myfiles"
+
+      if (userRole === "director") {
+        redirectPath = "/dashboard/files/inbox"
+      } else if (userRole === "department") {
+        redirectPath = "/dashboard/files/myfiles"
+      }
+
+      return NextResponse.redirect(new URL(redirectPath, request.url))
+    }
   }
 
   return NextResponse.next()

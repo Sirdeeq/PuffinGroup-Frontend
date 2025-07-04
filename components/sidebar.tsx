@@ -90,6 +90,12 @@ export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarP
       key: "dashboard",
     },
     {
+      name: "Attendance",
+      href: "/dashboard/attendance",
+      icon: Users,
+      key: "attendance",
+    },
+    {
       name: "Departments",
       icon: Building2,
       key: "departments",

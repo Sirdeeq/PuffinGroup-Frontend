@@ -17,13 +17,14 @@ import { Bell, LogOut, Settings, User, Menu } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { Logo } from "@/components/logo"
 import Sidebar from "@/components/sidebar"
+import { AttendanceWidget } from "@/components/attendance/attendance-widget"
 
 interface UserType {
   id: string
   firstName: string
   lastName: string
   email: string
-  role: "admin" | "director" | "department"
+  role: "admin" | "director" | "department" | "user"
   department?: string
   position?: string
   avatar?: string
@@ -46,6 +47,8 @@ export default function TopNavbar({ user }: TopNavbarProps) {
         return "red"
       case "department":
         return "green"
+      case "user":
+        return "blue"
       default:
         return "blue"
     }
@@ -59,6 +62,8 @@ export default function TopNavbar({ user }: TopNavbarProps) {
         return "General Managing Director"
       case "department":
         return "Department Head"
+      case "user":
+        return "Department User"
       default:
         return "User"
     }
@@ -84,7 +89,7 @@ export default function TopNavbar({ user }: TopNavbarProps) {
             </Sheet>
 
             <div className="flex items-center space-x-3">
-              <Logo size="xxxxxl" showText={false} />
+              <Logo size="md" showText={false} />
               <div className="hidden sm:block">
                 <Badge
                   variant="outline"
@@ -97,6 +102,11 @@ export default function TopNavbar({ user }: TopNavbarProps) {
           </div>
 
           <div className="flex items-center space-x-2 lg:space-x-4">
+            {/* Compact Attendance Widget */}
+            <div className="hidden md:block">
+              <AttendanceWidget compact={true} />
+            </div>
+
             {/* Notifications */}
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="w-5 h-5" />
@@ -136,6 +146,13 @@ export default function TopNavbar({ user }: TopNavbarProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+
+                {/* Mobile Attendance Widget */}
+                <div className="md:hidden px-2 py-2">
+                  <AttendanceWidget compact={true} />
+                </div>
+                <DropdownMenuSeparator className="md:hidden" />
+
                 <DropdownMenuItem>
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
