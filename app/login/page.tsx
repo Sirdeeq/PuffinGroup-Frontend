@@ -51,23 +51,19 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      // Get user role from auth context or localStorage
+      // Get user role from auth context
       const userRole = localStorage.getItem("userRole") || selectedRole
 
       // Show check-in modal for regular users, skip for admin and director
       if (userRole !== "admin" && userRole !== "director") {
         setShowCheckInModal(true)
       } else {
-        // Role-based redirect logic
-        let redirectPath = "/dashboard/files/myfiles" // default for users
+        // Set user role in localStorage and cookies
+        localStorage.setItem("userRole", userRole)
+        document.cookie = `userRole=${userRole}; path=/; max-age=${30 * 24 * 60 * 60}; secure; samesite=strict`
 
-        if (userRole === "admin") {
-          redirectPath = "/dashboard"
-        } else if (userRole === "director") {
-          redirectPath = "/dashboard/files/inbox"
-        }
-
-        router.push(redirectPath)
+        // Let middleware handle the redirect
+        router.push("/")
       }
     }
   }, [isAuthenticated, loading, router, selectedRole])
