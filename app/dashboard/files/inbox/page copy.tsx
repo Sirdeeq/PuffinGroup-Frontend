@@ -1,6 +1,6 @@
 "use client"
-import { useState, useEffect } from "react"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +27,7 @@ import {
   Inbox,
   FileText,
   Eye,
+  Trash2,
   CheckCircle,
   XCircle,
   RotateCcw,
@@ -53,28 +54,17 @@ import {
   FileVideo,
   FileAudio,
   Archive,
-  Folder,
-  Globe,
-  Lock,
-  Users,
-  ArrowRight,
 } from "lucide-react"
 import { redirect, useRouter } from "next/navigation"
 
 interface FileData {
   _id: string
-  name: string
   title: string
   description: string
   category: string
   priority?: string
   status: string
   requiresSignature?: boolean
-  folder?: {
-    _id: string
-    name: string
-    description?: string
-  }
   file: {
     name: string
     url: string
@@ -111,49 +101,6 @@ interface FileData {
     signatureData: string
     signedAt: string
   }>
-  sharedWithMe?: boolean
-}
-
-interface FolderData {
-  _id: string
-  name: string
-  description: string
-  isDefault: boolean
-  accessLevel: "public" | "department" | "private"
-  fileCount: number
-  createdBy: {
-    _id: string
-    firstName: string
-    lastName: string
-    email: string
-  }
-  departments: Array<{
-    _id: string
-    name: string
-    code: string
-  }>
-  canEdit?: boolean
-  canDelete?: boolean
-  canShare?: boolean
-  createdAt: string
-  updatedAt: string
-  sharedWith?: Array<{
-    type: string
-    userId?: {
-      _id: string
-      firstName: string
-      lastName: string
-      email: string
-    }
-    departmentId?: {
-      _id: string
-      name: string
-      code: string
-    }
-    permission: string
-    sharedAt: string
-  }>
-  sharedWithMe?: boolean
 }
 
 type SortOption = "name" | "date" | "size" | "type" | "priority"
@@ -164,10 +111,8 @@ export default function InboxPage() {
   const authContext = useAuth()
   const router = useRouter()
   const [files, setFiles] = useState<FileData[]>([])
-  const [folders, setFolders] = useState<FolderData[]>([])
-  const [filteredItems, setFilteredItems] = useState<(FileData | FolderData)[]>([])
+  const [filteredFiles, setFilteredFiles] = useState<FileData[]>([])
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null)
-  const [selectedFolder, setSelectedFolder] = useState<FolderData | null>(null)
   const [actionComment, setActionComment] = useState("")
   const [requireSignature, setRequireSignature] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -177,11 +122,9 @@ export default function InboxPage() {
   const [sortBy, setSortBy] = useState<SortOption>("date")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [userSignature, setUserSignature] = useState<any>(null)
-  const [currentFolder, setCurrentFolder] = useState<FolderData | null>(null)
 
   // Modal states
   const [showViewModal, setShowViewModal] = useState(false)
-  const [showFolderViewModal, setShowFolderViewModal] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [showSignatureDialog, setShowSignatureDialog] = useState(false)
@@ -244,6 +187,7 @@ export default function InboxPage() {
   const getFileIcon = (fileType: string, fileName: string) => {
     const type = fileType?.toLowerCase() || ""
     const extension = fileName?.split(".").pop()?.toLowerCase() || ""
+
     if (type.includes("image") || ["jpg", "jpeg", "png", "gif", "svg", "webp"].includes(extension)) {
       return <ImageIcon className="w-8 h-8 text-blue-500" />
     }
@@ -260,21 +204,6 @@ export default function InboxPage() {
       return <Archive className="w-8 h-8 text-orange-500" />
     }
     return <FileText className="w-8 h-8 text-gray-500" />
-  }
-
-  // Get folder icon based on access level
-  const getFolderIcon = (accessLevel: string, isDefault = false) => {
-    if (isDefault) {
-      return <Folder className="w-8 h-8 text-blue-600" />
-    }
-    switch (accessLevel) {
-      case "public":
-        return <Globe className="w-8 h-8 text-green-600" />
-      case "private":
-        return <Lock className="w-8 h-8 text-red-600" />
-      default:
-        return <Users className="w-8 h-8 text-orange-600" />
-    }
   }
 
   // Fetch user signature on component mount
@@ -296,29 +225,23 @@ export default function InboxPage() {
         console.error("Error fetching user signature:", error)
       }
     }
+
     if (authContext.isAuthenticated) {
       fetchUserSignature()
     }
   }, [authContext])
 
-  // Fetch inbox files and folders
-  const fetchInboxData = async () => {
+  // Fetch inbox files
+  const fetchInboxFiles = async () => {
     try {
       setLoading(true)
-
-      // Fetch both files and folders in parallel
-      const [filesResponse, foldersResponse] = await Promise.all([
-        api.getInboxFiles(authContext),
-        api.getInboxFolders(authContext),
-      ])
-
-      // Process files
-      if (filesResponse.success && filesResponse.data) {
-        const filesData = filesResponse.data.files || []
+      const response = await api.getInboxFiles(authContext)
+      if (response.success && response.data) {
+        // Process and sanitize files data
+        const filesData = response.data.files || []
         const processedFiles = filesData.map((file: any) => ({
           ...file,
-          name: file.name || file.title || "Untitled",
-          title: file.title || file.name || "Untitled",
+          title: file.title || "Untitled",
           description: file.description || "No description",
           category: file.category || "Uncategorized",
           status: file.status || "pending",
@@ -335,28 +258,17 @@ export default function InboxPage() {
             size: file.file?.size || 0,
             type: file.file?.type || "",
           },
-          folder: file.folder || null,
           departments: file.departments || [],
           signatures: file.signatures || [],
-          sharedWithMe: true,
         }))
         setFiles(processedFiles)
-      }
-
-      // Process folders
-      if (foldersResponse.success && foldersResponse.data) {
-        const foldersData = foldersResponse.data.folders || []
-        const processedFolders = foldersData.map((folder: any) => ({
-          ...folder,
-          sharedWithMe: true,
-        }))
-        setFolders(processedFolders)
+        setFilteredFiles(processedFiles)
       }
     } catch (error) {
-      console.error("Error fetching inbox data:", error)
+      console.error("Error fetching inbox files:", error)
       toast({
         title: "Error",
-        description: "Failed to load inbox data",
+        description: "Failed to load inbox files",
         variant: "destructive",
       })
     } finally {
@@ -365,56 +277,52 @@ export default function InboxPage() {
   }
 
   useEffect(() => {
-    fetchInboxData()
+    fetchInboxFiles()
   }, [authContext])
 
-  // Search and sort items
+  // Search and sort files
   useEffect(() => {
-    // Combine files and folders
-    const allItems: (FileData | FolderData)[] = [...files, ...folders]
-
-    const filtered = allItems.filter((item) => {
-      const name = "name" in item ? item.name : item.title || ""
-      const description = item.description || ""
-      const createdBy = item.createdBy ? `${item.createdBy.firstName} ${item.createdBy.lastName}` : ""
+    const filtered = files.filter((file) => {
+      const title = file.title || ""
+      const fileName = file.file?.name || ""
+      const category = file.category || ""
+      const firstName = file.createdBy?.firstName || ""
+      const lastName = file.createdBy?.lastName || ""
 
       return (
-        name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        createdBy.toLowerCase().includes(searchTerm.toLowerCase())
+        title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lastName.toLowerCase().includes(searchTerm.toLowerCase())
       )
     })
 
-    // Sort items (folders first)
+    // Sort files
     filtered.sort((a, b) => {
-      // Show folders first
-      const aIsFolder = !("file" in a)
-      const bIsFolder = !("file" in b)
-      if (aIsFolder && !bIsFolder) return -1
-      if (!aIsFolder && bIsFolder) return 1
-
       let aValue: any, bValue: any
+
       switch (sortBy) {
         case "name":
-          aValue = ("name" in a ? a.name : a.title || "").toLowerCase()
-          bValue = ("name" in b ? b.name : b.title || "").toLowerCase()
+          aValue = (a.title || "").toLowerCase()
+          bValue = (b.title || "").toLowerCase()
           break
         case "date":
           aValue = new Date(a.createdAt)
           bValue = new Date(b.createdAt)
           break
         case "size":
-          aValue = "file" in a ? a.file.size : 0
-          bValue = "file" in b ? b.file.size : 0
+          aValue = a.file?.size || 0
+          bValue = b.file?.size || 0
           break
         case "type":
-          aValue = "file" in a ? a.file.type.toLowerCase() : "folder"
-          bValue = "file" in b ? b.file.type.toLowerCase() : "folder"
+          aValue = (a.file?.type || "").toLowerCase()
+          bValue = (b.file?.type || "").toLowerCase()
           break
         case "priority":
           const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 }
-          aValue = "priority" in a ? priorityOrder[a.priority as keyof typeof priorityOrder] || 0 : 0
-          bValue = "priority" in b ? priorityOrder[b.priority as keyof typeof priorityOrder] || 0 : 0
+          aValue = priorityOrder[a.priority as keyof typeof priorityOrder] || 0
+          bValue = priorityOrder[b.priority as keyof typeof priorityOrder] || 0
           break
         default:
           return 0
@@ -427,8 +335,8 @@ export default function InboxPage() {
       }
     })
 
-    setFilteredItems(filtered)
-  }, [files, folders, searchTerm, sortBy, sortDirection])
+    setFilteredFiles(filtered)
+  }, [files, searchTerm, sortBy, sortDirection])
 
   const formatFileSize = (bytes: number) => {
     if (!bytes || bytes === 0) return "0 Bytes"
@@ -443,6 +351,7 @@ export default function InboxPage() {
     const now = new Date()
     const diffTime = Math.abs(now.getTime() - date.getTime())
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
     if (diffDays === 1) return "Today"
     if (diffDays === 2) return "Yesterday"
     if (diffDays <= 7) return `${diffDays - 1} days ago`
@@ -452,6 +361,7 @@ export default function InboxPage() {
   // Fixed priority color function with null checks
   const getPriorityColor = (priority?: string | null) => {
     if (!priority) return "bg-gray-100 text-gray-800"
+
     switch (priority.toLowerCase()) {
       case "urgent":
         return "bg-red-100 text-red-800"
@@ -469,6 +379,7 @@ export default function InboxPage() {
   // Fixed status color function with null checks
   const getStatusColor = (status?: string | null) => {
     if (!status) return "bg-gray-100 text-gray-800"
+
     switch (status.toLowerCase()) {
       case "active":
         return "bg-blue-100 text-blue-800"
@@ -496,80 +407,77 @@ export default function InboxPage() {
     }
   }
 
-  // // Navigation to folder
-  // const navigateToFolder = (folder: FolderData) => {
-  //   router.push(`/dashboard/files/inbox?folder=${folder._id}`)
-  // }
+  // Add signature to file
+  const handleAddSignature = async () => {
+    if (!selectedFile || !signatureText.trim()) {
+      toast({
+        title: "Missing signature",
+        description: "Please provide your signature",
+        variant: "destructive",
+      })
+      return
+    }
 
+    setIsAddingSignature(true)
+    try {
+      const signatureData = userSignature?.enabled && userSignature?.data ? userSignature.data : signatureText
 
-  // Navigation
-  const navigateToFolder = (folder: FolderData) => {
-    setCurrentFolder(folder)
+      const response = await api.addSignature(selectedFile._id, { signatureData }, authContext)
+
+      if (response.success) {
+        // Update local state
+        setFiles((prev) =>
+          prev.map((file) =>
+            file._id === selectedFile._id
+              ? {
+                  ...file,
+                  signatures: [
+                    ...(file.signatures || []),
+                    {
+                      _id: Date.now().toString(),
+                      user: authContext.user?.id || "",
+                      signatureData,
+                      signedAt: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : file,
+          ),
+        )
+
+        setShowAddSignatureDialog(false)
+        setSignatureText("")
+        toast({
+          title: "Signature added",
+          description: "Your signature has been added to the file",
+        })
+      } else {
+        throw new Error(response.error || "Failed to add signature")
+      }
+    } catch (error: any) {
+      toast({
+        title: "Signature failed",
+        description: error.message || "Failed to add signature",
+        variant: "destructive",
+      })
+    } finally {
+      setIsAddingSignature(false)
+    }
   }
-  // // Add signature to file
-  // const handleAddSignature = async () => {
-  //   if (!selectedFile || !signatureText.trim()) {
-  //     toast({
-  //       title: "Missing signature",
-  //       description: "Please provide your signature",
-  //       variant: "destructive",
-  //     })
-  //     return
-  //   }
-  //   setIsAddingSignature(true)
-  //   try {
-  //     const signatureData = userSignature?.enabled && userSignature?.data ? userSignature.data : signatureText
-  //     const response = await api.addSignature(selectedFile._id, { signatureData }, authContext)
-  //     if (response.success) {
-  //       // Update local state
-  //       setFiles((prev) =>
-  //         prev.map((file) =>
-  //           file._id === selectedFile._id
-  //             ? {
-  //                 ...file,
-  //                 signatures: [
-  //                   ...(file.signatures || []),
-  //                   {
-  //                     _id: Date.now().toString(),
-  //                     user: authContext.user?.id || "",
-  //                     signatureData,
-  //                     signedAt: new Date().toISOString(),
-  //                   },
-  //                 ],
-  //               }
-  //             : file,
-  //         ),
-  //       )
-  //       setShowAddSignatureDialog(false)
-  //       setSignatureText("")
-  //       toast({
-  //         title: "Signature added",
-  //         description: "Your signature has been added to the file",
-  //       })
-  //     } else {
-  //       throw new Error(response.error || "Failed to add signature")
-  //     }
-  //   } catch (error: any) {
-  //     toast({
-  //       title: "Signature failed",
-  //       description: error.message || "Failed to add signature",
-  //       variant: "destructive",
-  //     })
-  //   } finally {
-  //     setIsAddingSignature(false)
-  //   }
-  // }
 
   const handleFileAction = async (action: "approve" | "reject" | "sendback") => {
     if (!selectedFile) return
+
     // Check if approval requires signature and user hasn't signed yet
     if (action === "approve" && selectedFile.requiresSignature) {
       const userHasSigned = selectedFile.signatures?.some((sig) => sig.user === authContext.user?.id)
+
       if (!userHasSigned) {
         if (!userSignature?.enabled) {
           setShowSignatureDialog(true)
           return
         }
+
         // Show add signature dialog
         setShowAddSignatureDialog(true)
         return
@@ -586,6 +494,7 @@ export default function InboxPage() {
     }
 
     setIsProcessing(true)
+
     try {
       const actionData = {
         action,
@@ -595,15 +504,20 @@ export default function InboxPage() {
           ? { signatureData: userSignature.data }
           : {}),
       }
+
       const response = await api.takeFileAction(selectedFile._id, actionData, authContext)
+
       if (response.success) {
         const newStatus = action === "approve" ? "approved" : action === "reject" ? "rejected" : "sent_back"
+
         // Update local state
         setFiles((prev) => prev.map((file) => (file._id === selectedFile._id ? { ...file, status: newStatus } : file)))
+
         setSelectedFile(null)
         setActionComment("")
         setRequireSignature(false)
         setShowReviewModal(false)
+
         toast({
           title: `File ${action}d successfully`,
           description: `${selectedFile.title} has been ${action}d`,
@@ -624,9 +538,11 @@ export default function InboxPage() {
 
   const handleDeleteFile = async () => {
     if (!selectedFile) return
+
     try {
       setIsProcessing(true)
       const response = await api.deleteFile(selectedFile._id, authContext)
+
       if (response.success) {
         setFiles((prev) => prev.filter((file) => file._id !== selectedFile._id))
         setShowDeleteDialog(false)
@@ -647,26 +563,13 @@ export default function InboxPage() {
     }
   }
 
-  const openViewModal = (item: FileData | FolderData) => {
-    if ("file" in item) {
-      setSelectedFile(item)
-      setSelectedFolder(null)
-      setShowViewModal(true)
-    } else {
-      setSelectedFolder(item)
-      setSelectedFile(null)
-      setShowFolderViewModal(true)
-    }
+  const openViewModal = (file: FileData) => {
+    setSelectedFile(file)
+    setShowViewModal(true)
   }
 
-  const openDeleteDialog = (item: FileData | FolderData) => {
-    if ("file" in item) {
-      setSelectedFile(item)
-      setSelectedFolder(null)
-    } else {
-      setSelectedFolder(item)
-      setSelectedFile(null)
-    }
+  const openDeleteDialog = (file: FileData) => {
+    setSelectedFile(file)
     setShowDeleteDialog(true)
   }
 
@@ -695,7 +598,7 @@ export default function InboxPage() {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className={`h-8 w-8 animate-spin text-${themeColors.text}`} />
-        <span className="ml-2 text-gray-600">Loading inbox...</span>
+        <span className="ml-2 text-gray-600">Loading inbox files...</span>
       </div>
     )
   }
@@ -705,19 +608,20 @@ export default function InboxPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">Shared Inbox</h1>
-          <p className="text-slate-600 mt-1">Files and folders shared with you and your department</p>
+          <h1 className="text-3xl font-bold text-slate-800">File Inbox</h1>
+          <p className="text-slate-600 mt-1">Review and approve files shared with your department</p>
           {authContext.user?.role && (
             <Badge className={`mt-2 bg-${themeColors.badge} text-${themeColors.badgeText}`}>
               {authContext.user.role.toUpperCase()} INBOX
             </Badge>
           )}
         </div>
+
         <div className="flex items-center space-x-3">
           <Button
             variant="outline"
             size="sm"
-            onClick={fetchInboxData}
+            onClick={fetchInboxFiles}
             disabled={loading}
             className="flex items-center gap-2 bg-transparent"
           >
@@ -725,7 +629,7 @@ export default function InboxPage() {
             Refresh
           </Button>
           <Badge variant="outline" className={`text-${themeColors.text} border-${themeColors.text}`}>
-            {filteredItems.length} Items
+            {filteredFiles.length} Files
           </Badge>
         </div>
       </div>
@@ -735,12 +639,13 @@ export default function InboxPage() {
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
           <Input
-            placeholder="Search shared items..."
+            placeholder="Search inbox files..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
           />
         </div>
+
         <div className="flex items-center space-x-2">
           {/* Sort Options */}
           <DropdownMenu>
@@ -765,6 +670,7 @@ export default function InboxPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
           {/* View Toggle */}
           <Button
             variant={viewMode === "grid" ? "default" : "outline"}
@@ -785,16 +691,16 @@ export default function InboxPage() {
         </div>
       </div>
 
-      {/* Items Display */}
-      {filteredItems.length === 0 ? (
+      {/* File Display */}
+      {filteredFiles.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <Inbox className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-slate-800 mb-2">
-              {searchTerm ? "No items found" : "No shared items"}
+              {searchTerm ? "No files found" : "No files in inbox"}
             </h3>
             <p className="text-slate-600">
-              {searchTerm ? "Try adjusting your search terms" : "No files or folders have been shared with you yet"}
+              {searchTerm ? "Try adjusting your search terms" : "No files have been shared with your department yet"}
             </p>
           </CardContent>
         </Card>
@@ -803,108 +709,82 @@ export default function InboxPage() {
           {/* Grid View */}
           {viewMode === "grid" && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-              {filteredItems.map((item) => {
-                const isFolder = !("file" in item)
-                const folder = isFolder ? (item as FolderData) : null
-                const file = !isFolder ? (item as FileData) : null
+              {filteredFiles.map((file) => (
+                <Card
+                  key={file._id}
+                  className="hover:shadow-md transition-all cursor-pointer group relative"
+                  onClick={() => openViewModal(file)}
+                >
+                  <CardContent className="p-4 text-center">
+                    <div className="mb-3 flex justify-center">{getFileIcon(file.file.type, file.file.name)}</div>
+                    <h3 className="font-medium text-sm truncate mb-1" title={file.name}>
+                      {file.name}
+                    </h3>
+                    <p className="text-xs text-slate-500 mb-2">{formatFileSize(file.file.size)}</p>
+                    <p className="text-xs text-slate-400">{formatDate(file.createdAt)}</p>
 
-                return (
-                  <Card
-                    key={item._id}
-                    className="hover:shadow-md transition-all cursor-pointer group relative"
-                    onClick={() => {
-                      if (isFolder) {
-                        navigateToFolder(folder!)
-                      } else {
-                        openViewModal(file!)
-                      }
-                    }}
-                  >
-                    <CardContent className="p-4 text-center">
-                      <div className="mb-3 flex justify-center">
-                        {isFolder
-                          ? getFolderIcon(folder!.accessLevel, folder!.isDefault)
-                          : getFileIcon(file!.file.type, file!.file.name)}
-                      </div>
-                      <h3 className="font-medium text-sm truncate mb-1" title={isFolder ? folder!.name : file!.name}>
-                        {isFolder ? folder!.name : file!.name}
-                      </h3>
-                      <p className="text-xs text-slate-500 mb-2">
-                        {isFolder ? `${folder!.fileCount} files` : formatFileSize(file!.file.size)}
-                      </p>
-                      <p className="text-xs text-slate-400">{formatDate(item.createdAt)}</p>
+                    {/* Status and Priority Badges */}
+                    {/* <div className="flex flex-wrap gap-1 mt-2 justify-center">
+                      <Badge className={`text-xs ${getStatusColor(file.status)}`}>{file.status || "Unknown"}</Badge>
+                      {file.priority && (
+                        <Badge className={`text-xs ${getPriorityColor(file.priority)}`}>{file.priority}</Badge>
+                      )}
+                    </div> */}
 
-                      {/* Action Menu */}
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 bg-white shadow-sm">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                            <DropdownMenuItem onClick={() => openViewModal(item)}>
-                              <Eye className="w-4 h-4 mr-2" />
-                              View Details
+                    {/* Action Menu */}
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 bg-white shadow-sm">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem onClick={() => openViewModal(file)}>
+                            <Eye className="w-4 h-4 mr-2" />
+                            View Details
+                          </DropdownMenuItem>
+                          {/* <DropdownMenuItem onClick={() => openReviewModal(file)}>
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Review & Approve
+                          </DropdownMenuItem>
+                          {file.requiresSignature && !hasUserSigned(file) && (
+                            <DropdownMenuItem onClick={() => openAddSignatureDialog(file)}>
+                              <PenTool className="w-4 h-4 mr-2" />
+                              Add Signature
                             </DropdownMenuItem>
-                            {isFolder ? (
-                              <DropdownMenuItem onClick={() => navigateToFolder(folder!)}>
-                                <ArrowRight className="w-4 h-4 mr-2" />
-                                Open Folder
-                              </DropdownMenuItem>
-                            ) : (
-                              <>
-                                {/* <DropdownMenuItem onClick={() => openReviewModal(file!)}>
-                                  <CheckCircle className="w-4 h-4 mr-2" />
-                                  Review & Approve
-                                </DropdownMenuItem>
-                                {file!.requiresSignature && !hasUserSigned(file!) && (
-                                  <DropdownMenuItem onClick={() => openAddSignatureDialog(file!)}>
-                                    <PenTool className="w-4 h-4 mr-2" />
-                                    Add Signature
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuItem asChild>
-                                  <a href={file!.file.url} target="_blank" rel="noopener noreferrer">
-                                    <Download className="w-4 h-4 mr-2" />
-                                    Download
-                                  </a>
-                                </DropdownMenuItem> */}
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                          )} */}
+                          <DropdownMenuItem asChild>
+                            <a href={file.file.url} target="_blank" rel="noopener noreferrer">
+                              <Download className="w-4 h-4 mr-2" />
+                              Download
+                            </a>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openDeleteDialog(file)} className="text-red-600">
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
 
-                      {/* Status Indicators */}
-                      <div className="absolute top-2 left-2 flex flex-col gap-1">
-                        <Badge variant="secondary" className="text-xs px-1 py-0 bg-blue-100 text-blue-800">
-                          Shared
+                    {/* Status Indicators */}
+                    <div className="absolute top-2 left-2 flex flex-col gap-1">
+                      {file.requiresSignature && (
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs px-1 py-0 ${
+                            hasUserSigned(file) ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"
+                          }`}
+                        >
+                          <PenTool className="w-2 h-2 mr-1" />
+                          {hasUserSigned(file) ? "Signed" : "Sign"}
                         </Badge>
-                        {!isFolder && file!.requiresSignature && (
-                          <Badge
-                            variant="secondary"
-                            className={`text-xs px-1 py-0 ${hasUserSigned(file!) ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
-                              }`}
-                          >
-                            <PenTool className="w-2 h-2 mr-1" />
-                            {hasUserSigned(file!) ? "Signed" : "Sign"}
-                          </Badge>
-                        )}
-                        {isFolder && (
-                          <Badge variant="secondary" className="text-xs px-1 py-0">
-                            {folder!.accessLevel === "public"
-                              ? "Public"
-                              : folder!.accessLevel === "private"
-                                ? "Private"
-                                : "Department"}
-                          </Badge>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
 
@@ -913,104 +793,71 @@ export default function InboxPage() {
             <Card>
               <CardContent className="p-0">
                 <div className="divide-y">
-                  {filteredItems.map((item) => {
-                    const isFolder = !("file" in item)
-                    const folder = isFolder ? (item as FolderData) : null
-                    const file = !isFolder ? (item as FileData) : null
-
-                    return (
-                      <div
-                        key={item._id}
-                        className="flex items-center p-4 hover:bg-slate-50 cursor-pointer group"
-                        onClick={() => {
-                          if (isFolder) {
-                            navigateToFolder(folder!)
-                          } else {
-                            openViewModal(file!)
-                          }
-                        }}
-                      >
-                        <div className="flex items-center flex-1 min-w-0">
-                          <div className="mr-3">
-                            {isFolder
-                              ? getFolderIcon(folder!.accessLevel, folder!.isDefault)
-                              : getFileIcon(file!.file.type, file!.file.name)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-medium truncate">{isFolder ? folder!.name : file!.name}</h3>
-                              <Badge variant="secondary" className="text-xs px-1 py-0 bg-blue-100 text-blue-800">
-                                Shared
-                              </Badge>
-                              {!isFolder && file!.requiresSignature && (
-                                <Badge
-                                  variant="secondary"
-                                  className={`text-xs px-1 py-0 ${hasUserSigned(file!)
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-orange-100 text-orange-800"
-                                    }`}
-                                >
-                                  <PenTool className="w-2 h-2 mr-1" />
-                                  {hasUserSigned(file!) ? "Signed" : "Sign"}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-sm text-slate-500 truncate">{item.description}</p>
-                          </div>
-                        </div>
-                        <div className="hidden md:flex items-center space-x-6 text-sm text-slate-500">
-                          <span className="w-20 text-right">
-                            {isFolder ? `${folder!.fileCount} files` : formatFileSize(file!.file.size)}
-                          </span>
-                          <span className="w-24">{isFolder ? folder!.accessLevel : file!.category}</span>
-                          <span className="w-32">
-                            {item.createdBy.firstName} {item.createdBy.lastName}
-                          </span>
-                          <span className="w-24">{formatDate(item.createdAt)}</span>
-                        </div>
-                        <div className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                              <DropdownMenuItem onClick={() => openViewModal(item)}>
-                                <Eye className="w-4 h-4 mr-2" />
-                                View Details
-                              </DropdownMenuItem>
-                              {isFolder ? (
-                                <DropdownMenuItem onClick={() => navigateToFolder(folder!)}>
-                                  <ArrowRight className="w-4 h-4 mr-2" />
-                                  Open Folder
-                                </DropdownMenuItem>
-                              ) : (
-                                <>
-                                  {/* <DropdownMenuItem onClick={() => openReviewModal(file!)}>
-                                    <CheckCircle className="w-4 h-4 mr-2" />
-                                    Review & Approve
-                                  </DropdownMenuItem>
-                                  {file!.requiresSignature && !hasUserSigned(file!) && (
-                                    <DropdownMenuItem onClick={() => openAddSignatureDialog(file!)}>
-                                      <PenTool className="w-4 h-4 mr-2" />
-                                      Add Signature
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem asChild>
-                                    <a href={file!.file.url} target="_blank" rel="noopener noreferrer">
-                                      <Download className="w-4 h-4 mr-2" />
-                                      Download
-                                    </a>
-                                  </DropdownMenuItem> */}
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                  {filteredFiles.map((file) => (
+                    <div
+                      key={file._id}
+                      className="flex items-center p-4 hover:bg-slate-50 cursor-pointer group"
+                      onClick={() => openViewModal(file)}
+                    >
+                      <div className="flex items-center flex-1 min-w-0">
+                        <div className="mr-3">{getFileIcon(file.file.type, file.file.name)}</div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium truncate">{file.name}</h3>
+                          <p className="text-sm text-slate-500 truncate">{file.description}</p>
                         </div>
                       </div>
-                    )
-                  })}
+
+                      <div className="hidden md:flex items-center space-x-6 text-sm text-slate-500">
+                        <span className="w-20 text-right">{formatFileSize(file.file.size)}</span>
+                        {/* <span className="w-24">{file.category}</span> */}
+                        {/* <div className="w-32 flex flex-col">
+                          <Badge className={`text-xs ${getStatusColor(file.status)} mb-1`}>
+                            {file.status || "Unknown"}
+                          </Badge>
+                          {file.priority && (
+                            <Badge className={`text-xs ${getPriorityColor(file.priority)}`}>{file.priority}</Badge>
+                          )}
+                        </div> */}
+                        <span className="w-24">{formatDate(file.createdAt)}</span>
+                      </div>
+
+                      <div className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem onClick={() => openViewModal(file)}>
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            {/* <DropdownMenuItem onClick={() => openReviewModal(file)}>
+                              <CheckCircle className="w-4 h-4 mr-2" />
+                              Review & Approve
+                            </DropdownMenuItem>
+                            {file.requiresSignature && !hasUserSigned(file) && (
+                              <DropdownMenuItem onClick={() => openAddSignatureDialog(file)}>
+                                <PenTool className="w-4 h-4 mr-2" />
+                                Add Signature
+                              </DropdownMenuItem>
+                            )} */}
+                            <DropdownMenuItem asChild>
+                              <a href={file.file.url} target="_blank" rel="noopener noreferrer">
+                                <Download className="w-4 h-4 mr-2" />
+                                Download
+                              </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openDeleteDialog(file)} className="text-red-600">
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -1033,17 +880,19 @@ export default function InboxPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">File Name</Label>
-                  <p className="text-sm font-medium">{selectedFile.file.name}</p>
+                  <p className="text-sm font-medium">{selectedFile.name}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">File Size</Label>
                   <p className="text-sm font-medium">{formatFileSize(selectedFile.file.size)}</p>
                 </div>
               </div>
+
               <div>
                 <Label className="text-sm font-medium text-muted-foreground">Description</Label>
                 <p className="text-sm">{selectedFile.description}</p>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">Category</Label>
@@ -1058,6 +907,7 @@ export default function InboxPage() {
                   )}
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">Created By</Label>
@@ -1071,19 +921,11 @@ export default function InboxPage() {
                   <p className="text-sm">{new Date(selectedFile.createdAt).toLocaleString()}</p>
                 </div>
               </div>
-              {selectedFile.folder && (
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Folder</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Folder className="w-4 h-4 text-blue-600" />
-                    <span className="text-sm">{selectedFile.folder.name}</span>
-                  </div>
-                </div>
-              )}
+
               <div>
                 <Label className="text-sm font-medium text-muted-foreground">Departments</Label>
                 <div className="flex flex-wrap gap-2 mt-1">
-                  {selectedFile.departments.map((dept) => (
+                  {selectedFile.sharedWith.map((dept) => (
                     <Badge key={dept._id} variant="outline" className="text-xs">
                       <Building2 className="w-3 h-3 mr-1" />
                       {dept.name}
@@ -1091,6 +933,7 @@ export default function InboxPage() {
                   ))}
                 </div>
               </div>
+
               <div className="flex gap-3 pt-4">
                 <Button variant="outline" asChild className="flex-1 bg-transparent">
                   <a href={selectedFile.file.url} target="_blank" rel="noopener noreferrer">
@@ -1100,10 +943,7 @@ export default function InboxPage() {
                 </Button>
                 {/* <Button
                   variant="outline"
-                  onClick={() => {
-                    setShowViewModal(false)
-                    openReviewModal(selectedFile)
-                  }}
+                  onClick={() => openReviewModal(selectedFile)}
                   className={`flex-1 bg-${themeColors.primary} hover:bg-${themeColors.primaryHover} text-white`}
                 >
                   <CheckCircle className="w-4 h-4 mr-2" />
@@ -1115,84 +955,7 @@ export default function InboxPage() {
         </DialogContent>
       </Dialog>
 
-      {/* View Folder Modal */}
-      <Dialog open={showFolderViewModal} onOpenChange={setShowFolderViewModal}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedFolder && getFolderIcon(selectedFolder.accessLevel, selectedFolder.isDefault)}
-              {selectedFolder?.name}
-            </DialogTitle>
-            <DialogDescription>Shared folder details and information</DialogDescription>
-          </DialogHeader>
-          {selectedFolder && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Folder Name</Label>
-                  <p className="text-sm font-medium">{selectedFolder.name}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">File Count</Label>
-                  <p className="text-sm font-medium">{selectedFolder.fileCount} files</p>
-                </div>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Description</Label>
-                <p className="text-sm">{selectedFolder.description}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Access Level</Label>
-                  <div className="flex items-center gap-2">
-                    {selectedFolder.accessLevel === "public" && <Globe className="w-4 h-4 text-green-600" />}
-                    {selectedFolder.accessLevel === "private" && <Lock className="w-4 h-4 text-red-600" />}
-                    {selectedFolder.accessLevel === "department" && <Users className="w-4 h-4 text-orange-600" />}
-                    <span className="text-sm capitalize">{selectedFolder.accessLevel}</span>
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Created Date</Label>
-                  <p className="text-sm">{new Date(selectedFolder.createdAt).toLocaleString()}</p>
-                </div>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Created By</Label>
-                <p className="text-sm">
-                  {selectedFolder.createdBy.firstName} {selectedFolder.createdBy.lastName}
-                </p>
-                <p className="text-xs text-muted-foreground">{selectedFolder.createdBy.email}</p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Departments</Label>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {selectedFolder.departments.map((dept) => (
-                    <Badge key={dept._id} variant="outline" className="text-xs">
-                      <Building2 className="w-3 h-3 mr-1" />
-                      {dept.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-3 pt-4">
-                <Button
-                  variant="outline"
-                  className="flex-1 bg-transparent"
-                  onClick={() => {
-                    setShowFolderViewModal(false)
-                    navigateToFolder(selectedFolder)
-                  }}
-                >
-                  <ArrowRight className="w-4 h-4 mr-2" />
-                  Open Folder
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Enhanced Review File Modal
+      {/* Enhanced Review File Modal */}
       <Dialog open={showReviewModal} onOpenChange={setShowReviewModal}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader className="border-b pb-4">
@@ -1204,8 +967,10 @@ export default function InboxPage() {
               Review the file details and take appropriate action
             </DialogDescription>
           </DialogHeader>
+
           {selectedFile && (
             <div className="space-y-6 py-4">
+              {/* File Information Card */}
               <Card className={`border-l-4 border-l-${themeColors.primary}`}>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -1235,6 +1000,7 @@ export default function InboxPage() {
                         </div>
                       </div>
                     </div>
+
                     <div className="space-y-3">
                       <div>
                         <Label className="text-sm font-medium text-muted-foreground">Submitted By</Label>
@@ -1262,6 +1028,8 @@ export default function InboxPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Departments */}
                   <div>
                     <Label className="text-sm font-medium text-muted-foreground">Departments</Label>
                     <div className="flex flex-wrap gap-2 mt-1">
@@ -1273,6 +1041,8 @@ export default function InboxPage() {
                       ))}
                     </div>
                   </div>
+
+                  {/* File Attachment */}
                   <div>
                     <Label className="text-sm font-medium text-muted-foreground">File Attachment</Label>
                     <div className="flex items-center justify-between p-3 border rounded-lg mt-1 bg-white">
@@ -1291,8 +1061,11 @@ export default function InboxPage() {
                       </Button>
                     </div>
                   </div>
+
+                  {/* Signature Requirements */}
                   {selectedFile.requiresSignature && (
                     <div className="space-y-4">
+                      {/* Signature Requirement Info */}
                       <div className={`p-4 bg-${themeColors.bg} border border-${themeColors.primary} rounded-lg`}>
                         <div className="flex items-center gap-2 mb-2">
                           <PenTool className={`w-4 h-4 text-${themeColors.text}`} />
@@ -1317,6 +1090,8 @@ export default function InboxPage() {
                           </Button>
                         )}
                       </div>
+
+                      {/* Existing Signatures */}
                       {selectedFile.signatures && selectedFile.signatures.length > 0 && (
                         <div>
                           <Label className="text-sm font-medium text-muted-foreground">
@@ -1356,6 +1131,8 @@ export default function InboxPage() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Review Actions Card */}
               <Card className="border-l-4 border-l-green-500">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -1364,6 +1141,7 @@ export default function InboxPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {/* Comment Section */}
                   <div className="space-y-2">
                     <Label htmlFor="action-comment" className="text-sm font-medium">
                       Review Comment
@@ -1380,6 +1158,8 @@ export default function InboxPage() {
                       Comments are required for reject and send back actions
                     </p>
                   </div>
+
+                  {/* Signature Requirement Toggle */}
                   <div className="flex items-center justify-between p-4 border rounded-lg bg-slate-50">
                     <div className="space-y-1">
                       <Label htmlFor="require-signature" className="text-sm font-medium">
@@ -1389,6 +1169,8 @@ export default function InboxPage() {
                     </div>
                     <Switch id="require-signature" checked={requireSignature} onCheckedChange={setRequireSignature} />
                   </div>
+
+                  {/* Action Buttons */}
                   <div className="flex items-center justify-end space-x-3 pt-4 border-t">
                     <Button variant="outline" onClick={() => setShowReviewModal(false)} disabled={isProcessing}>
                       Cancel
@@ -1439,7 +1221,8 @@ export default function InboxPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showAddSignatureDialog} onOpenChange={setShowAddSignatureDialog}>
+      {/* Add Signature Dialog */}
+      {/* <Dialog open={showAddSignatureDialog} onOpenChange={setShowAddSignatureDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1481,6 +1264,7 @@ export default function InboxPage() {
               </div>
             )}
           </div>
+
           <div className="flex justify-end space-x-3">
             <Button variant="outline" onClick={() => setShowAddSignatureDialog(false)} disabled={isAddingSignature}>
               Cancel
@@ -1508,9 +1292,10 @@ export default function InboxPage() {
             </Button>
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog> */}
 
-      <AlertDialog open={showSignatureDialog} onOpenChange={setShowSignatureDialog}>
+      {/* Signature Required Dialog */}
+      {/* <AlertDialog open={showSignatureDialog} onOpenChange={setShowSignatureDialog}>
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -1542,10 +1327,9 @@ export default function InboxPage() {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedFile ? "File" : "Folder"}</AlertDialogTitle>
+            <AlertDialogTitle>Delete File</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{selectedFile ? selectedFile.name : selectedFolder?.name}"? This action
-              cannot be undone.
+              Are you sure you want to delete "{selectedFile?.title}"? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1561,7 +1345,7 @@ export default function InboxPage() {
                   Deleting...
                 </>
               ) : (
-                `Delete ${selectedFile ? "File" : "Folder"}`
+                "Delete File"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

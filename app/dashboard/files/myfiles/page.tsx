@@ -1,6 +1,7 @@
 "use client"
-
 import { useState, useEffect } from "react"
+import type React from "react"
+
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -44,9 +45,13 @@ import {
   Archive,
   SortAsc,
   SortDesc,
+  ArrowLeft,
+  FolderPlus,
+  Lock,
+  Globe,
+  Users,
 } from "lucide-react"
 import { redirect } from "next/navigation"
-import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -54,12 +59,18 @@ import FileUploadForm from "@/components/file-upload-form"
 
 interface FileData {
   _id: string
+  name: string
   title: string
   description: string
   category: string
   priority?: string
   status: string
   requiresSignature?: boolean
+  folder: {
+    _id: string
+    name: string
+    description?: string
+  }
   file: {
     name: string
     url: string
@@ -79,7 +90,6 @@ interface FileData {
     code: string
     description?: string
   }>
-  departmentNames?: string[]
   canEdit?: boolean
   canDelete?: boolean
   canShare?: boolean
@@ -98,6 +108,47 @@ interface FileData {
   }>
 }
 
+interface FolderData {
+  _id: string
+  name: string
+  description: string
+  isDefault: boolean
+  accessLevel: "public" | "department" | "private"
+  fileCount: number
+  createdBy: {
+    _id: string
+    firstName: string
+    lastName: string
+    email: string
+  }
+  departments: Array<{
+    _id: string
+    name: string
+    code: string
+  }>
+  canEdit?: boolean
+  canDelete?: boolean
+  canShare?: boolean
+  createdAt: string
+  updatedAt: string
+  sharedWith?: Array<{
+    type: string
+    userId?: {
+      _id: string
+      firstName: string
+      lastName: string
+      email: string
+    }
+    departmentId?: {
+      _id: string
+      name: string
+      code: string
+    }
+    permission: string
+    sharedAt: string
+  }>
+}
+
 type SortOption = "name" | "date" | "size" | "type"
 type SortDirection = "asc" | "desc"
 
@@ -105,8 +156,11 @@ export default function FileManagerPage() {
   const { toast } = useToast()
   const authContext = useAuth()
   const [files, setFiles] = useState<FileData[]>([])
-  const [filteredFiles, setFilteredFiles] = useState<FileData[]>([])
+  const [folders, setFolders] = useState<FolderData[]>([])
+  const [filteredItems, setFilteredItems] = useState<(FileData | FolderData)[]>([])
+  const [currentFolder, setCurrentFolder] = useState<FolderData | null>(null)
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null)
+  const [selectedFolder, setSelectedFolder] = useState<FolderData | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<string[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -114,6 +168,7 @@ export default function FileManagerPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [sortBy, setSortBy] = useState<SortOption>("date")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
+  const [draggedFile, setDraggedFile] = useState<FileData | null>(null)
 
   // Modal states
   const [showViewModal, setShowViewModal] = useState(false)
@@ -121,19 +176,34 @@ export default function FileManagerPage() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
+  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false)
+  const [showFolderViewModal, setShowFolderViewModal] = useState(false)
+
+  // Form states
   const [editFormData, setEditFormData] = useState({
+    name: "",
     title: "",
     description: "",
     category: "",
     priority: "",
     departments: [] as string[],
   })
+
   const [shareFormData, setShareFormData] = useState({
     departments: [] as string[],
+    users: [] as string[],
     message: "",
   })
+
+  const [folderFormData, setFolderFormData] = useState({
+    name: "",
+    description: "",
+    accessLevel: "department" as "public" | "department" | "private",
+    departments: [] as string[],
+  })
+
   const [departments, setDepartments] = useState<any[]>([])
-  const [loadingDepartments, setLoadingDepartments] = useState(false)
+  const [users, setUsers] = useState<any[]>([])
 
   // Get theme colors based on user role
   const getThemeColor = () => {
@@ -188,7 +258,6 @@ export default function FileManagerPage() {
   const getFileIcon = (fileType: string, fileName: string) => {
     const type = fileType.toLowerCase()
     const extension = fileName.split(".").pop()?.toLowerCase()
-
     if (type.includes("image") || ["jpg", "jpeg", "png", "gif", "svg", "webp"].includes(extension || "")) {
       return <ImageIcon className="w-8 h-8 text-blue-500" />
     }
@@ -207,48 +276,68 @@ export default function FileManagerPage() {
     return <FileText className="w-8 h-8 text-gray-500" />
   }
 
-  // Fetch files
-  const fetchFiles = async () => {
+  // Get folder icon based on access level
+  const getFolderIcon = (accessLevel: string, isDefault = false) => {
+    if (isDefault) {
+      return <Folder className="w-8 h-8 text-blue-600" />
+    }
+    switch (accessLevel) {
+      case "public":
+        return <Globe className="w-8 h-8 text-green-600" />
+      case "private":
+        return <Lock className="w-8 h-8 text-red-600" />
+      default:
+        return <Users className="w-8 h-8 text-orange-600" />
+    }
+  }
+
+  // Fetch folders and files
+  const fetchData = async () => {
     try {
       setLoading(true)
-      const response = await api.getFiles("", authContext)
 
-      if (!response.success) {
-        throw new Error(response.message || "Failed to load files")
+      // Fetch folders
+      const foldersResponse = await api.getFolders(authContext)
+      if (foldersResponse.success && foldersResponse.data) {
+        setFolders(foldersResponse.data.folders || [])
       }
 
-      const filesData = response.data.files || []
-      const processedFiles = filesData.map((file: any) => ({
-        ...file,
-        title: file.title || "Untitled",
-        description: file.description || "No description",
-        category: file.category || "Uncategorized",
-        status: file.status || "draft",
-        priority: file.priority || null,
-        departmentNames: file.departments?.map((dept: any) => dept.name) || [],
-        createdBy: {
-          _id: file.createdBy?._id || "",
-          firstName: file.createdBy?.firstName || "Unknown",
-          lastName: file.createdBy?.lastName || "User",
-          email: file.createdBy?.email || "",
-          position: file.createdBy?.position || "",
-        },
-        file: {
-          name: file.file?.name || "Unknown file",
-          url: file.file?.url || "",
-          size: file.file?.size || 0,
-          type: file.file?.type || "",
-        },
-        departments: file.departments || [],
-      }))
-
-      setFiles(processedFiles)
-      setFilteredFiles(processedFiles)
+      // Fetch files (filtered by current folder if selected)
+      const filesParams = currentFolder ? { folderId: currentFolder._id } : {}
+      const filesResponse = await api.getFiles(filesParams, authContext)
+      if (filesResponse.success && filesResponse.data) {
+        const filesData = filesResponse.data.files || []
+        const processedFiles = filesData.map((file: any) => ({
+          ...file,
+          name: file.name || file.title || "Untitled",
+          title: file.title || file.name || "Untitled",
+          description: file.description || "No description",
+          category: file.category || "Uncategorized",
+          status: file.status || "draft",
+          priority: file.priority || null,
+          createdBy: {
+            _id: file.createdBy?._id || "",
+            firstName: file.createdBy?.firstName || "Unknown",
+            lastName: file.createdBy?.lastName || "User",
+            email: file.createdBy?.email || "",
+            position: file.createdBy?.position || "",
+          },
+          file: {
+            name: file.file?.name || "Unknown file",
+            url: file.file?.url || "",
+            size: file.file?.size || 0,
+            type: file.file?.type || "",
+          },
+          folder: file.folder || null,
+          departments: file.departments || [],
+        }))
+        setFiles(processedFiles)
+      }
     } catch (error: any) {
-      console.error("Error fetching files:", error)
+      console.error("Error fetching data:", error)
       toast({
         title: "Error",
-        description: error.message || "Failed to load files",
+        description: error.message || "Failed to load data",
         variant: "destructive",
       })
     } finally {
@@ -256,48 +345,88 @@ export default function FileManagerPage() {
     }
   }
 
-  useEffect(() => {
-    fetchFiles()
-  }, [authContext])
+  // Fetch departments and users
+  const fetchDepartmentsAndUsers = async () => {
+    try {
+      const [deptResponse, usersResponse] = await Promise.all([
+        api.getDepartments({ includeInactive: false }, authContext),
+        api.getUsers(authContext),
+      ])
 
-  // Search and sort files
+      if (deptResponse.success && deptResponse.data) {
+        setDepartments(deptResponse.data.departments || [])
+      }
+
+      if (usersResponse.success && usersResponse.data) {
+        const filteredUsers = (usersResponse.data.users || []).filter(user => 
+          user.role === 'user' // Adjust this condition based on your actual role property and value
+        )
+        setUsers(filteredUsers)
+      }
+    } catch (error) {
+      console.error("Error fetching departments and users:", error)
+    }
+  }
+
   useEffect(() => {
-    const filtered = files.filter((file) => {
-      const title = file.title || ""
-      const fileName = file.file?.name || ""
-      const category = file.category || ""
-      const firstName = file.createdBy?.firstName || ""
-      const lastName = file.createdBy?.lastName || ""
+    if (authContext.isAuthenticated) {
+      fetchData()
+      fetchDepartmentsAndUsers()
+    }
+  }, [authContext, currentFolder])
+
+  // Search and sort items
+  useEffect(() => {
+    let items: (FileData | FolderData)[] = []
+
+    if (!currentFolder) {
+      // Show folders and files from default folder
+      items = [...folders, ...files]
+    } else {
+      // Show only files in current folder
+      items = files
+    }
+
+    // Filter by search term
+    const filtered = items.filter((item) => {
+      const name = "name" in item ? item.name : item.title || ""
+      const description = item.description || ""
+      const createdBy = item.createdBy ? `${item.createdBy.firstName} ${item.createdBy.lastName}` : ""
 
       return (
-        title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lastName.toLowerCase().includes(searchTerm.toLowerCase())
+        name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        createdBy.toLowerCase().includes(searchTerm.toLowerCase())
       )
     })
 
-    // Sort files
+    // Sort items (folders first when not in a folder)
     filtered.sort((a, b) => {
-      let aValue: any, bValue: any
+      // If not in a folder, show folders first
+      if (!currentFolder) {
+        const aIsFolder = !("file" in a)
+        const bIsFolder = !("file" in b)
+        if (aIsFolder && !bIsFolder) return -1
+        if (!aIsFolder && bIsFolder) return 1
+      }
 
+      let aValue: any, bValue: any
       switch (sortBy) {
         case "name":
-          aValue = a.title.toLowerCase()
-          bValue = b.title.toLowerCase()
+          aValue = ("name" in a ? a.name : a.title || "").toLowerCase()
+          bValue = ("name" in b ? b.name : b.title || "").toLowerCase()
           break
         case "date":
           aValue = new Date(a.createdAt)
           bValue = new Date(b.createdAt)
           break
         case "size":
-          aValue = a.file.size
-          bValue = b.file.size
+          aValue = "file" in a ? a.file.size : 0
+          bValue = "file" in b ? b.file.size : 0
           break
         case "type":
-          aValue = a.file.type.toLowerCase()
-          bValue = b.file.type.toLowerCase()
+          aValue = "file" in a ? a.file.type.toLowerCase() : "folder"
+          bValue = "file" in b ? b.file.type.toLowerCase() : "folder"
           break
         default:
           return 0
@@ -310,16 +439,97 @@ export default function FileManagerPage() {
       }
     })
 
-    setFilteredFiles(filtered)
-  }, [files, searchTerm, sortBy, sortDirection])
+    setFilteredItems(filtered)
+  }, [files, folders, searchTerm, sortBy, sortDirection, currentFolder])
 
-  const handleDeleteFile = async () => {
-    if (!selectedFile) return
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, file: FileData) => {
+    setDraggedFile(file)
+    e.dataTransfer.effectAllowed = "move"
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+  }
+
+  const handleDrop = async (e: React.DragEvent, targetFolder: FolderData) => {
+    e.preventDefault()
+    if (!draggedFile) return
 
     try {
       setIsProcessing(true)
-      const response = await api.deleteFile(selectedFile._id, authContext)
+      const response = await api.moveFileToFolder(draggedFile._id, targetFolder._id, authContext)
 
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: `File moved to ${targetFolder.name}`,
+        })
+        fetchData() // Refresh data
+      } else {
+        throw new Error(response.message || "Failed to move file")
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to move file",
+        variant: "destructive",
+      })
+    } finally {
+      setIsProcessing(false)
+      setDraggedFile(null)
+    }
+  }
+
+  // Navigation
+  const navigateToFolder = (folder: FolderData) => {
+    setCurrentFolder(folder)
+  }
+
+  const navigateBack = () => {
+    setCurrentFolder(null)
+  }
+
+  // Create folder
+  const handleCreateFolder = async () => {
+    try {
+      setIsProcessing(true)
+      const response = await api.createFolder(folderFormData, authContext)
+
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Folder created successfully",
+        })
+        setShowCreateFolderModal(false)
+        setFolderFormData({
+          name: "",
+          description: "",
+          accessLevel: "department",
+          departments: [],
+        })
+        fetchData()
+      } else {
+        throw new Error(response.message || "Failed to create folder")
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create folder",
+        variant: "destructive",
+      })
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  // Delete handlers
+  const handleDeleteFile = async () => {
+    if (!selectedFile) return
+    try {
+      setIsProcessing(true)
+      const response = await api.deleteFile(selectedFile._id, authContext)
       if (response.success) {
         setFiles((prev) => prev.filter((file) => file._id !== selectedFile._id))
         setShowDeleteDialog(false)
@@ -328,6 +538,7 @@ export default function FileManagerPage() {
           title: "Success",
           description: "File deleted successfully",
         })
+        fetchData() // Refresh to update folder counts
       } else {
         throw new Error(response.message || "Failed to delete file")
       }
@@ -342,114 +553,47 @@ export default function FileManagerPage() {
     }
   }
 
-  const formatFileSize = (bytes: number) => {
-    if (!bytes || bytes === 0) return "0 Bytes"
-    const k = 1024
-    const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffTime = Math.abs(now.getTime() - date.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-
-    if (diffDays === 1) return "Today"
-    if (diffDays === 2) return "Yesterday"
-    if (diffDays <= 7) return `${diffDays - 1} days ago`
-    return date.toLocaleDateString()
-  }
-
-  const openViewModal = (file: FileData) => {
-    setSelectedFile(file)
-    setShowViewModal(true)
-  }
-
-  const openDeleteDialog = (file: FileData) => {
-    setSelectedFile(file)
-    setShowDeleteDialog(true)
-  }
-
-  const toggleSort = (option: SortOption) => {
-    if (sortBy === option) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
-    } else {
-      setSortBy(option)
-      setSortDirection("asc")
-    }
-  }
-
-  // Fetch departments
-  const fetchDepartments = async () => {
+  const handleDeleteFolder = async () => {
+    if (!selectedFolder) return
     try {
-      setLoadingDepartments(true)
-      const response = await api.getDepartments({ includeInactive: false }, authContext)
-      if (response.success && response.data) {
-        setDepartments(response.data.departments || [])
+      setIsProcessing(true)
+      const response = await api.deleteFolder(selectedFolder._id, authContext)
+      if (response.success) {
+        setFolders((prev) => prev.filter((folder) => folder._id !== selectedFolder._id))
+        setShowDeleteDialog(false)
+        setSelectedFolder(null)
+        toast({
+          title: "Success",
+          description: "Folder deleted successfully",
+        })
+        fetchData()
+      } else {
+        throw new Error(response.message || "Failed to delete folder")
       }
-    } catch (error) {
-      console.error("Error fetching departments:", error)
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to load departments",
+        description: error.message || "Failed to delete folder",
         variant: "destructive",
       })
     } finally {
-      setLoadingDepartments(false)
+      setIsProcessing(false)
     }
   }
 
-  // Open edit modal
-  const openEditModal = (file: FileData) => {
-    setSelectedFile(file)
-    setEditFormData({
-      title: file.title,
-      description: file.description,
-      category: file.category,
-      priority: file.priority || "medium",
-      departments: file.departments.map((dept) => dept._id),
-    })
-    setShowEditModal(true)
-  }
-
-  // Open share modal
-  const openShareModal = (file: FileData) => {
-    setSelectedFile(file)
-    setShareFormData({
-      departments: [],
-      message: "",
-    })
-    setShowShareModal(true)
-  }
-
-  // Handle edit submit
+  // Edit handlers
   const handleEditSubmit = async () => {
     if (!selectedFile) return
-
     try {
       setIsProcessing(true)
       const response = await api.updateFile(selectedFile._id, editFormData, authContext)
-
       if (response.success) {
-        // Update the file in the list
-        setFiles((prev) =>
-          prev.map((file) =>
-            file._id === selectedFile._id
-              ? {
-                  ...file,
-                  ...editFormData,
-                  departments: departments.filter((dept) => editFormData.departments.includes(dept._id)),
-                }
-              : file,
-          ),
-        )
         setShowEditModal(false)
         toast({
           title: "Success",
           description: "File updated successfully",
         })
+        fetchData()
       } else {
         throw new Error(response.message || "Failed to update file")
       }
@@ -464,27 +608,34 @@ export default function FileManagerPage() {
     }
   }
 
-  // Handle share submit
+  // Share handlers
   const handleShareSubmit = async () => {
-    if (!selectedFile) return
+    if (!selectedFile && !selectedFolder) return
 
     try {
       setIsProcessing(true)
-      const response = await api.shareFile(selectedFile._id, shareFormData, authContext)
+      let response
 
-      if (response.success) {
+      if (selectedFile) {
+        response = await api.shareFile(selectedFile._id, shareFormData, authContext)
+      } else if (selectedFolder) {
+        response = await api.shareFolder(selectedFolder._id, shareFormData, authContext)
+      }
+
+      if (response?.success) {
         setShowShareModal(false)
         toast({
           title: "Success",
-          description: `File shared with ${shareFormData.departments.length} department(s)`,
+          description: `${selectedFile ? "File" : "Folder"} shared successfully`,
         })
+        fetchData()
       } else {
-        throw new Error(response.message || "Failed to share file")
+        throw new Error(response?.message || "Failed to share")
       }
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to share file",
+        description: error.message || "Failed to share",
         variant: "destructive",
       })
     } finally {
@@ -492,10 +643,87 @@ export default function FileManagerPage() {
     }
   }
 
-  // Handle download
+  // Utility functions
+  const formatFileSize = (bytes: number) => {
+    if (!bytes || bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffTime = Math.abs(now.getTime() - date.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    if (diffDays === 1) return "Today"
+    if (diffDays === 2) return "Yesterday"
+    if (diffDays <= 7) return `${diffDays - 1} days ago`
+    return date.toLocaleDateString()
+  }
+
+  const toggleSort = (option: SortOption) => {
+    if (sortBy === option) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
+    } else {
+      setSortBy(option)
+      setSortDirection("asc")
+    }
+  }
+
+  const openViewModal = (file: FileData) => {
+    setSelectedFile(file)
+    setShowViewModal(true)
+  }
+
+  const openDeleteDialog = (item: FileData | FolderData) => {
+    if ("file" in item) {
+      setSelectedFile(item)
+      setSelectedFolder(null)
+    } else {
+      setSelectedFolder(item)
+      setSelectedFile(null)
+    }
+    setShowDeleteDialog(true)
+  }
+
+  const openEditModal = (file: FileData) => {
+    setSelectedFile(file)
+    setEditFormData({
+      name: file.name,
+      title: file.title,
+      description: file.description,
+      category: file.category,
+      priority: file.priority || "medium",
+      departments: file.departments.map((dept) => dept._id),
+    })
+    setShowEditModal(true)
+  }
+
+  const openShareModal = (item: FileData | FolderData) => {
+    if ("file" in item) {
+      setSelectedFile(item)
+      setSelectedFolder(null)
+    } else {
+      setSelectedFolder(item)
+      setSelectedFile(null)
+    }
+    setShareFormData({
+      departments: [],
+      users: [],
+      message: "",
+    })
+    setShowShareModal(true)
+  }
+
+  const openFolderViewModal = (folder: FolderData) => {
+    setSelectedFolder(folder)
+    setShowFolderViewModal(true)
+  }
+
   const handleDownload = async (file: FileData) => {
     try {
-      // Create a temporary link and trigger download
       const link = document.createElement("a")
       link.href = file.file.url
       link.download = file.file.name
@@ -503,7 +731,6 @@ export default function FileManagerPage() {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-
       toast({
         title: "Download started",
         description: `Downloading ${file.file.name}`,
@@ -517,17 +744,11 @@ export default function FileManagerPage() {
     }
   }
 
-  useEffect(() => {
-    if (authContext.isAuthenticated) {
-      fetchDepartments()
-    }
-  }, [authContext])
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className={`h-8 w-8 animate-spin text-${themeColors.text}`} />
-        <span className="ml-2 text-gray-600">Loading files...</span>
+        <span className="ml-2 text-gray-600">Loading...</span>
       </div>
     )
   }
@@ -536,16 +757,30 @@ export default function FileManagerPage() {
     <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800">File Manager</h1>
-          <p className="text-slate-600 mt-1">Organize and manage your files</p>
+        <div className="flex items-center gap-4">
+          {currentFolder && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={navigateBack}
+              className="flex items-center gap-2 bg-transparent"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </Button>
+          )}
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">{currentFolder ? currentFolder.name : "File Manager"}</h1>
+            <p className="text-slate-600 mt-1">
+              {currentFolder ? currentFolder.description : "Organize and manage your files and folders"}
+            </p>
+          </div>
         </div>
-
         <div className="flex items-center space-x-3">
           <Button
             variant="outline"
             size="sm"
-            onClick={fetchFiles}
+            onClick={fetchData}
             disabled={loading}
             className="flex items-center gap-2 bg-transparent"
           >
@@ -553,8 +788,18 @@ export default function FileManagerPage() {
             Refresh
           </Button>
           <Badge variant="outline" className={`text-${themeColors.text} border-${themeColors.text}`}>
-            {filteredFiles.length} Files
+            {filteredItems.length} Items
           </Badge>
+          {!currentFolder && (
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateFolderModal(true)}
+              className="flex items-center gap-2"
+            >
+              <FolderPlus className="w-4 h-4" />
+              New Folder
+            </Button>
+          )}
           <Button
             onClick={() => setShowUploadModal(true)}
             className={`bg-${themeColors.primary} hover:bg-${themeColors.primaryHover} text-white`}
@@ -576,7 +821,6 @@ export default function FileManagerPage() {
             className="pl-10"
           />
         </div>
-
         <div className="flex items-center space-x-2">
           {/* Sort Options */}
           <DropdownMenu>
@@ -601,7 +845,6 @@ export default function FileManagerPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
           {/* View Toggle */}
           <Button
             variant={viewMode === "grid" ? "default" : "outline"}
@@ -622,24 +865,35 @@ export default function FileManagerPage() {
         </div>
       </div>
 
-      {/* File Display */}
-      {filteredFiles.length === 0 ? (
+      {/* Items Display */}
+      {filteredItems.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <Folder className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-slate-800 mb-2">
-              {searchTerm ? "No files found" : "No files yet"}
+              {searchTerm ? "No items found" : currentFolder ? "Folder is empty" : "No items yet"}
             </h3>
             <p className="text-slate-600 mb-6">
-              {searchTerm ? "Try adjusting your search terms" : "Upload your first file to get started"}
+              {searchTerm ? "Try adjusting your search terms" : "Upload files or create folders to get started"}
             </p>
-            {!searchTerm && (
-              <Link href="/dashboard/files/create">
-                <Button className={`bg-${themeColors.primary} hover:bg-${themeColors.primaryHover} text-white`}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Upload First File
+            {!searchTerm && !currentFolder && (
+              <div className="flex gap-3 justify-center">
+                <Button
+                  onClick={() => setShowCreateFolderModal(true)}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                  Create Folder
                 </Button>
-              </Link>
+                <Button
+                  onClick={() => setShowUploadModal(true)}
+                  className={`bg-${themeColors.primary} hover:bg-${themeColors.primaryHover} text-white`}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Upload File
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -648,70 +902,132 @@ export default function FileManagerPage() {
           {/* Grid View */}
           {viewMode === "grid" && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-              {filteredFiles.map((file) => (
-                <Card
-                  key={file._id}
-                  className="hover:shadow-md transition-all cursor-pointer group relative"
-                  onClick={() => openViewModal(file)}
-                >
-                  <CardContent className="p-4 text-center">
-                    <div className="mb-3 flex justify-center">{getFileIcon(file.file.type, file.file.name)}</div>
-                    <h3 className="font-medium text-sm truncate mb-1" title={file.title}>
-                      {file.name}
-                    </h3>
-                    <p className="text-xs text-slate-500 mb-2">{formatFileSize(file.file.size)}</p>
-                    <p className="text-xs text-slate-400">{formatDate(file.createdAt)}</p>
+              {filteredItems.map((item) => {
+                const isFolder = !("file" in item)
+                const folder = isFolder ? (item as FolderData) : null
+                const file = !isFolder ? (item as FileData) : null
 
-                    {/* Action Menu */}
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 bg-white shadow-sm">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenuItem onClick={() => openViewModal(file)}>
-                            <Eye className="w-4 h-4 mr-2" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDownload(file)}>
-                            <Download className="w-4 h-4 mr-2" />
-                            Download
-                          </DropdownMenuItem>
-                          {file.canEdit && (
-                            <DropdownMenuItem onClick={() => openEditModal(file)}>
-                              <Edit className="w-4 h-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                          )}
-                          {file.canShare && (
-                            <DropdownMenuItem onClick={() => openShareModal(file)}>
-                              <Share className="w-4 h-4 mr-2" />
-                              Share
-                            </DropdownMenuItem>
-                          )}
-                          {file.canDelete && (
-                            <DropdownMenuItem onClick={() => openDeleteDialog(file)} className="text-red-600">
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                return (
+                  <Card
+                    key={item._id}
+                    className={`hover:shadow-md transition-all cursor-pointer group relative ${
+                      draggedFile && isFolder ? "border-2 border-dashed border-blue-400 bg-blue-50" : ""
+                    }`}
+                    onClick={() => {
+                      if (isFolder) {
+                        navigateToFolder(folder!)
+                      } else {
+                        openViewModal(file!)
+                      }
+                    }}
+                    onDragOver={isFolder ? handleDragOver : undefined}
+                    onDrop={isFolder ? (e) => handleDrop(e, folder!) : undefined}
+                  >
+                    <CardContent className="p-4 text-center">
+                      <div className="mb-3 flex justify-center">
+                        {isFolder
+                          ? getFolderIcon(folder!.accessLevel, folder!.isDefault)
+                          : getFileIcon(file!.file.type, file!.file.name)}
+                      </div>
+                      <h3 className="font-medium text-sm truncate mb-1" title={isFolder ? folder!.name : file!.name}>
+                        {isFolder ? folder!.name : file!.name}
+                      </h3>
+                      <p className="text-xs text-slate-500 mb-2">
+                        {isFolder ? `${folder!.fileCount} files` : formatFileSize(file!.file.size)}
+                      </p>
+                      <p className="text-xs text-slate-400">{formatDate(item.createdAt)}</p>
 
-                    {/* Status Indicators */}
-                    <div className="absolute top-2 left-2 flex flex-col gap-1">
-                      {file.sharedWithMe && (
-                        <Badge variant="secondary" className="text-xs px-1 py-0">
-                          Shared
-                        </Badge>
+                      {/* Action Menu */}
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 bg-white shadow-sm">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                if (isFolder) {
+                                  openFolderViewModal(folder!)
+                                } else {
+                                  openViewModal(file!)
+                                }
+                              }}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            {!isFolder && (
+                              <DropdownMenuItem onClick={() => handleDownload(file!)}>
+                                <Download className="w-4 h-4 mr-2" />
+                                Download
+                              </DropdownMenuItem>
+                            )}
+                            {((isFolder && folder!.canEdit) || (!isFolder && file!.canEdit)) && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  if (!isFolder) {
+                                    openEditModal(file!)
+                                  }
+                                }}
+                              >
+                                <Edit className="w-4 h-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
+                            {((isFolder && folder!.canShare) || (!isFolder && file!.canShare)) && (
+                              <DropdownMenuItem onClick={() => openShareModal(item)}>
+                                <Share className="w-4 h-4 mr-2" />
+                                Share
+                              </DropdownMenuItem>
+                            )}
+                            {((isFolder && folder!.canDelete && !folder!.isDefault) ||
+                              (!isFolder && file!.canDelete)) && (
+                              <DropdownMenuItem onClick={() => openDeleteDialog(item)} className="text-red-600">
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      {/* Status Indicators */}
+                      <div className="absolute top-2 left-2 flex flex-col gap-1">
+                        {isFolder && (
+                          <Badge variant="secondary" className="text-xs px-1 py-0">
+                            {folder!.accessLevel === "public"
+                              ? "Public"
+                              : folder!.accessLevel === "private"
+                                ? "Private"
+                                : "Department"}
+                          </Badge>
+                        )}
+                        {!isFolder && file!.sharedWithMe && (
+                          <Badge variant="secondary" className="text-xs px-1 py-0">
+                            Shared
+                          </Badge>
+                        )}
+                        {isFolder && folder!.isDefault && (
+                          <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 text-blue-700">
+                            Default
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Drag indicator for files */}
+                      {!isFolder && (
+                        <div
+                          className="absolute inset-0 opacity-0"
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, file!)}
+                        />
                       )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           )}
 
@@ -720,74 +1036,248 @@ export default function FileManagerPage() {
             <Card>
               <CardContent className="p-0">
                 <div className="divide-y">
-                  {filteredFiles.map((file) => (
-                    <div
-                      key={file._id}
-                      className="flex items-center p-4 hover:bg-slate-50 cursor-pointer group"
-                      onClick={() => openViewModal(file)}
-                    >
-                      <div className="flex items-center flex-1 min-w-0">
-                        <div className="mr-3">{getFileIcon(file.file.type, file.file.name)}</div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-medium truncate">{file.name}</h3>
-                          <p className="text-sm text-slate-500 truncate">{file.description}</p>
+                  {filteredItems.map((item) => {
+                    const isFolder = !("file" in item)
+                    const folder = isFolder ? (item as FolderData) : null
+                    const file = !isFolder ? (item as FileData) : null
+
+                    return (
+                      <div
+                        key={item._id}
+                        className={`flex items-center p-4 hover:bg-slate-50 cursor-pointer group ${
+                          draggedFile && isFolder ? "bg-blue-50 border-l-4 border-blue-400" : ""
+                        }`}
+                        onClick={() => {
+                          if (isFolder) {
+                            navigateToFolder(folder!)
+                          } else {
+                            openViewModal(file!)
+                          }
+                        }}
+                        draggable={!isFolder}
+                        onDragStart={!isFolder ? (e) => handleDragStart(e, file!) : undefined}
+                        onDragOver={isFolder ? handleDragOver : undefined}
+                        onDrop={isFolder ? (e) => handleDrop(e, folder!) : undefined}
+                      >
+                        <div className="flex items-center flex-1 min-w-0">
+                          <div className="mr-3">
+                            {isFolder
+                              ? getFolderIcon(folder!.accessLevel, folder!.isDefault)
+                              : getFileIcon(file!.file.type, file!.file.name)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-medium truncate">{isFolder ? folder!.name : file!.name}</h3>
+                              {isFolder && folder!.isDefault && (
+                                <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 text-blue-700">
+                                  Default
+                                </Badge>
+                              )}
+                              {!isFolder && file!.sharedWithMe && (
+                                <Badge variant="secondary" className="text-xs px-1 py-0">
+                                  Shared
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-500 truncate">{item.description}</p>
+                          </div>
+                        </div>
+                        <div className="hidden md:flex items-center space-x-6 text-sm text-slate-500">
+                          <span className="w-20 text-right">
+                            {isFolder ? `${folder!.fileCount} files` : formatFileSize(file!.file.size)}
+                          </span>
+                          <span className="w-24">{isFolder ? folder!.accessLevel : file!.category}</span>
+                          <span className="w-32">
+                            {item.createdBy.firstName} {item.createdBy.lastName}
+                          </span>
+                          <span className="w-24">{formatDate(item.createdAt)}</span>
+                        </div>
+                        <div className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  if (isFolder) {
+                                    openFolderViewModal(folder!)
+                                  } else {
+                                    openViewModal(file!)
+                                  }
+                                }}
+                              >
+                                <Eye className="w-4 h-4 mr-2" />
+                                View Details
+                              </DropdownMenuItem>
+                              {!isFolder && (
+                                <DropdownMenuItem onClick={() => handleDownload(file!)}>
+                                  <Download className="w-4 h-4 mr-2" />
+                                  Download
+                                </DropdownMenuItem>
+                              )}
+                              {((isFolder && folder!.canEdit) || (!isFolder && file!.canEdit)) && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    if (!isFolder) {
+                                      openEditModal(file!)
+                                    }
+                                  }}
+                                >
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                              )}
+                              {((isFolder && folder!.canShare) || (!isFolder && file!.canShare)) && (
+                                <DropdownMenuItem onClick={() => openShareModal(item)}>
+                                  <Share className="w-4 h-4 mr-2" />
+                                  Share
+                                </DropdownMenuItem>
+                              )}
+                              {((isFolder && folder!.canDelete && !folder!.isDefault) ||
+                                (!isFolder && file!.canDelete)) && (
+                                <DropdownMenuItem onClick={() => openDeleteDialog(item)} className="text-red-600">
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
-
-                      <div className="hidden md:flex items-center space-x-6 text-sm text-slate-500">
-                        <span className="w-20 text-right">{formatFileSize(file.file.size)}</span>
-                        <span className="w-24">{file.category}</span>
-                        <span className="w-32">
-                          {file.createdBy.firstName} {file.createdBy.lastName}
-                        </span>
-                        <span className="w-24">{formatDate(file.createdAt)}</span>
-                      </div>
-
-                      <div className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                            <DropdownMenuItem onClick={() => openViewModal(file)}>
-                              <Eye className="w-4 h-4 mr-2" />
-                              View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDownload(file)}>
-                              <Download className="w-4 h-4 mr-2" />
-                              Download
-                            </DropdownMenuItem>
-                            {file.canEdit && (
-                              <DropdownMenuItem onClick={() => openEditModal(file)}>
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                            )}
-                            {file.canShare && (
-                              <DropdownMenuItem onClick={() => openShareModal(file)}>
-                                <Share className="w-4 h-4 mr-2" />
-                                Share
-                              </DropdownMenuItem>
-                            )}
-                            {file.canDelete && (
-                              <DropdownMenuItem onClick={() => openDeleteDialog(file)} className="text-red-600">
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
           )}
         </>
       )}
+
+      {/* Create Folder Modal */}
+      <Dialog open={showCreateFolderModal} onOpenChange={setShowCreateFolderModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Create New Folder</DialogTitle>
+            <DialogDescription>Create a new folder to organize your files</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="folder-name">Folder Name</Label>
+                <Input
+                  id="folder-name"
+                  value={folderFormData.name}
+                  onChange={(e) => setFolderFormData((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter folder name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="folder-access">Access Level</Label>
+                <Select
+                  value={folderFormData.accessLevel}
+                  onValueChange={(value: "public" | "department" | "private") =>
+                    setFolderFormData((prev) => ({ ...prev, accessLevel: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select access level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="public">Public - All users can access</SelectItem>
+                    <SelectItem value="department">Department - Department members only</SelectItem>
+                    <SelectItem value="private">Private - Only you can access</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="folder-description">Description</Label>
+              <Textarea
+                id="folder-description"
+                value={folderFormData.description}
+                onChange={(e) => setFolderFormData((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Enter folder description"
+                rows={3}
+              />
+            </div>
+            {folderFormData.accessLevel === "department" && (
+              <div>
+                <Label className="text-sm font-medium">Select Departments</Label>
+                <div className="mt-2 max-h-48 overflow-y-auto border rounded-lg p-3">
+                  {departments.map((dept) => (
+                    <div key={dept._id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded">
+                      <Checkbox
+                        checked={folderFormData.departments.includes(dept._id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setFolderFormData((prev) => ({
+                              ...prev,
+                              departments: [...prev.departments, dept._id],
+                            }))
+                          } else {
+                            setFolderFormData((prev) => ({
+                              ...prev,
+                              departments: prev.departments.filter((id) => id !== dept._id),
+                            }))
+                          }
+                        }}
+                      />
+                      <Label className="text-sm cursor-pointer flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-blue-600" />
+                        {dept.name} ({dept.code})
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-3 pt-4">
+              <Button variant="outline" onClick={() => setShowCreateFolderModal(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateFolder}
+                disabled={isProcessing || !folderFormData.name.trim()}
+                className={`flex-1 bg-${themeColors.primary} hover:bg-${themeColors.primaryHover} text-white`}
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Folder"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload File Modal */}
+      <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Upload New File</DialogTitle>
+            <DialogDescription>
+              Upload a file to {currentFolder ? currentFolder.name : "the default folder"}
+            </DialogDescription>
+          </DialogHeader>
+          <FileUploadForm
+            onClose={() => setShowUploadModal(false)}
+            onSuccess={() => {
+              setShowUploadModal(false)
+              fetchData()
+            }}
+            authContext={authContext}
+            themeColors={themeColors}
+            currentFolder={currentFolder}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* View File Modal */}
       <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
@@ -811,12 +1301,10 @@ export default function FileManagerPage() {
                   <p className="text-sm font-medium">{formatFileSize(selectedFile.file.size)}</p>
                 </div>
               </div>
-
               <div>
                 <Label className="text-sm font-medium text-muted-foreground">Description</Label>
                 <p className="text-sm">{selectedFile.description}</p>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">Category</Label>
@@ -827,7 +1315,6 @@ export default function FileManagerPage() {
                   <p className="text-sm">{selectedFile.file.type || "Unknown"}</p>
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">Created By</Label>
@@ -841,7 +1328,15 @@ export default function FileManagerPage() {
                   <p className="text-sm">{new Date(selectedFile.createdAt).toLocaleString()}</p>
                 </div>
               </div>
-
+              {selectedFile.folder && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Folder</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Folder className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm">{selectedFile.folder.name}</span>
+                  </div>
+                </div>
+              )}
               <div>
                 <Label className="text-sm font-medium text-muted-foreground">Departments</Label>
                 <div className="flex flex-wrap gap-2 mt-1">
@@ -853,7 +1348,6 @@ export default function FileManagerPage() {
                   ))}
                 </div>
               </div>
-
               <div className="flex gap-3 pt-4">
                 <Button variant="outline" asChild className="flex-1 bg-transparent">
                   <a href={selectedFile.file.url} target="_blank" rel="noopener noreferrer">
@@ -862,13 +1356,117 @@ export default function FileManagerPage() {
                   </a>
                 </Button>
                 {selectedFile.canEdit && (
-                  <Button variant="outline" className="flex-1 bg-transparent">
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-transparent"
+                    onClick={() => {
+                      setShowViewModal(false)
+                      openEditModal(selectedFile)
+                    }}
+                  >
                     <Edit className="w-4 h-4 mr-2" />
                     Edit
                   </Button>
                 )}
                 {selectedFile.canShare && (
-                  <Button variant="outline" className="flex-1 bg-transparent">
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-transparent"
+                    onClick={() => {
+                      setShowViewModal(false)
+                      openShareModal(selectedFile)
+                    }}
+                  >
+                    <Share className="w-4 h-4 mr-2" />
+                    Share
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* View Folder Modal */}
+      <Dialog open={showFolderViewModal} onOpenChange={setShowFolderViewModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedFolder && getFolderIcon(selectedFolder.accessLevel, selectedFolder.isDefault)}
+              {selectedFolder?.name}
+            </DialogTitle>
+            <DialogDescription>Folder details and information</DialogDescription>
+          </DialogHeader>
+          {selectedFolder && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Folder Name</Label>
+                  <p className="text-sm font-medium">{selectedFolder.name}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">File Count</Label>
+                  <p className="text-sm font-medium">{selectedFolder.fileCount} files</p>
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Description</Label>
+                <p className="text-sm">{selectedFolder.description}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Access Level</Label>
+                  <div className="flex items-center gap-2">
+                    {selectedFolder.accessLevel === "public" && <Globe className="w-4 h-4 text-green-600" />}
+                    {selectedFolder.accessLevel === "private" && <Lock className="w-4 h-4 text-red-600" />}
+                    {selectedFolder.accessLevel === "department" && <Users className="w-4 h-4 text-orange-600" />}
+                    <span className="text-sm capitalize">{selectedFolder.accessLevel}</span>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Created Date</Label>
+                  <p className="text-sm">{new Date(selectedFolder.createdAt).toLocaleString()}</p>
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Created By</Label>
+                <p className="text-sm">
+                  {selectedFolder.createdBy.firstName} {selectedFolder.createdBy.lastName}
+                </p>
+                <p className="text-xs text-muted-foreground">{selectedFolder.createdBy.email}</p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Departments</Label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {selectedFolder.departments.map((dept) => (
+                    <Badge key={dept._id} variant="outline" className="text-xs">
+                      <Building2 className="w-3 h-3 mr-1" />
+                      {dept.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  className="flex-1 bg-transparent"
+                  onClick={() => {
+                    setShowFolderViewModal(false)
+                    navigateToFolder(selectedFolder)
+                  }}
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Open Folder
+                </Button>
+                {selectedFolder.canShare && (
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-transparent"
+                    onClick={() => {
+                      setShowFolderViewModal(false)
+                      openShareModal(selectedFolder)
+                    }}
+                  >
                     <Share className="w-4 h-4 mr-2" />
                     Share
                   </Button>
@@ -883,15 +1481,17 @@ export default function FileManagerPage() {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete File</AlertDialogTitle>
+            <AlertDialogTitle>Delete {selectedFile ? "File" : "Folder"}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{selectedFile?.title}"? This action cannot be undone.
+              Are you sure you want to delete "{selectedFile ? selectedFile.name : selectedFolder?.name}"?
+              {selectedFolder && " All files in this folder will need to be moved first."}
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isProcessing}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteFile}
+              onClick={selectedFile ? handleDeleteFile : handleDeleteFolder}
               disabled={isProcessing}
               className="bg-red-600 hover:bg-red-700"
             >
@@ -901,7 +1501,7 @@ export default function FileManagerPage() {
                   Deleting...
                 </>
               ) : (
-                "Delete File"
+                `Delete ${selectedFile ? "File" : "Folder"}`
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -946,7 +1546,6 @@ export default function FileManagerPage() {
                   </Select>
                 </div>
               </div>
-
               <div>
                 <Label htmlFor="edit-description">Description</Label>
                 <Textarea
@@ -957,7 +1556,6 @@ export default function FileManagerPage() {
                   rows={3}
                 />
               </div>
-
               <div>
                 <Label htmlFor="edit-priority">Priority</Label>
                 <Select
@@ -975,7 +1573,6 @@ export default function FileManagerPage() {
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="flex gap-3 pt-4">
                 <Button variant="outline" onClick={() => setShowEditModal(false)} className="flex-1">
                   Cancel
@@ -1000,19 +1597,21 @@ export default function FileManagerPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Share File Modal */}
+      {/* Share Modal */}
       <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Share File: {selectedFile?.title}</DialogTitle>
-            <DialogDescription>Select departments to share this file with</DialogDescription>
+            <DialogTitle>
+              Share {selectedFile ? "File" : "Folder"}: {selectedFile?.title || selectedFolder?.name}
+            </DialogTitle>
+            <DialogDescription>Select departments and users to share with</DialogDescription>
           </DialogHeader>
-          {selectedFile && (
+          {(selectedFile || selectedFolder) && (
             <div className="space-y-4">
               <div>
                 <Label className="text-sm font-medium">Current Departments</Label>
                 <div className="flex flex-wrap gap-2 mt-2 p-3 bg-gray-50 rounded-lg">
-                  {selectedFile.departments.map((dept) => (
+                  {(selectedFile?.departments || selectedFolder?.departments || []).map((dept) => (
                     <Badge key={dept._id} variant="outline" className="text-xs">
                       <Building2 className="w-3 h-3 mr-1" />
                       {dept.name} ({dept.code})
@@ -1020,12 +1619,16 @@ export default function FileManagerPage() {
                   ))}
                 </div>
               </div>
-
               <div>
                 <Label className="text-sm font-medium">Share with Additional Departments</Label>
                 <div className="mt-2 max-h-48 overflow-y-auto border rounded-lg p-3">
                   {departments
-                    .filter((dept) => !selectedFile.departments.some((d) => d._id === dept._id))
+                    .filter(
+                      (dept) =>
+                        !(selectedFile?.departments || selectedFolder?.departments || []).some(
+                          (d) => d._id === dept._id,
+                        ),
+                    )
                     .map((dept) => (
                       <div key={dept._id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded">
                         <Checkbox
@@ -1052,7 +1655,41 @@ export default function FileManagerPage() {
                     ))}
                 </div>
               </div>
-
+              <div>
+                <Label className="text-sm font-medium">Share with Users</Label>
+                <div className="mt-2 max-h-48 overflow-y-auto border rounded-lg p-3">
+                  {users.map((user) => (
+                    <div key={user._id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded">
+                      <Checkbox
+                        checked={shareFormData.users.includes(user._id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setShareFormData((prev) => ({
+                              ...prev,
+                              users: [...prev.users, user._id],
+                            }))
+                          } else {
+                            setShareFormData((prev) => ({
+                              ...prev,
+                              users: prev.users.filter((id) => id !== user._id),
+                            }))
+                          }
+                        }}
+                      />
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-sm cursor-pointer">
+                          {user.firstName} {user.lastName} ({user.email})
+                        </Label>
+                        {user.department?.map((dept, index) => (
+                          <Badge key={index} variant="secondary">
+                            {dept.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div>
                 <Label htmlFor="share-message">Message (Optional)</Label>
                 <Textarea
@@ -1063,14 +1700,15 @@ export default function FileManagerPage() {
                   rows={3}
                 />
               </div>
-
               <div className="flex gap-3 pt-4">
                 <Button variant="outline" onClick={() => setShowShareModal(false)} className="flex-1">
                   Cancel
                 </Button>
                 <Button
                   onClick={handleShareSubmit}
-                  disabled={isProcessing || shareFormData.departments.length === 0}
+                  disabled={
+                    isProcessing || (shareFormData.departments.length === 0 && shareFormData.users.length === 0)
+                  }
                   className={`flex-1 bg-${themeColors.primary} hover:bg-${themeColors.primaryHover} text-white`}
                 >
                   {isProcessing ? (
@@ -1079,31 +1717,12 @@ export default function FileManagerPage() {
                       Sharing...
                     </>
                   ) : (
-                    `Share with ${shareFormData.departments.length} Department(s)`
+                    `Share with ${shareFormData.departments.length + shareFormData.users.length} Recipient(s)`
                   )}
                 </Button>
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Upload File Modal */}
-      <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Upload New File</DialogTitle>
-            <DialogDescription>Create and submit a new file for processing</DialogDescription>
-          </DialogHeader>
-          <FileUploadForm
-            onClose={() => setShowUploadModal(false)}
-            onSuccess={() => {
-              setShowUploadModal(false)
-              fetchFiles()
-            }}
-            authContext={authContext}
-            themeColors={themeColors}
-          />
         </DialogContent>
       </Dialog>
     </div>
