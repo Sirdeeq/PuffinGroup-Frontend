@@ -11,17 +11,17 @@ export async function middleware(request: NextRequest) {
 
   // Function to determine redirect path based on role
   const getRedirectPath = (role: string | undefined): string => {
-    if (!role) return "/dashboard/files/myfiles"
-    
+    if (!role) return "/dashboard/files/inbox"
+
     switch (role) {
       case "admin":
         return "/dashboard"
       case "director":
-        return "/dashboard/files/inbox"
       case "department":
-        return "/dashboard/files/myfiles"
+      case "user":
+        return "/dashboard/files/inbox"
       default:
-        return "/dashboard/files/myfiles"
+        return "/dashboard/files/inbox"
     }
   }
 
@@ -30,18 +30,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  // Handle redirects when user is logged in
+  // Handle redirects when user is logged in and accessing public paths
   if ((publicPaths.includes(path) || path === "/") && token) {
     const redirectPath = getRedirectPath(userRole)
     return NextResponse.redirect(new URL(redirectPath, request.url))
   }
 
-  // Protect dashboard route for non-admin users
-  if (path === "/dashboard" && token && userRole !== "admin") {
-    const redirectPath = getRedirectPath(userRole)
-    return NextResponse.redirect(new URL(redirectPath, request.url))
+  // Admin-only routes protection
+  if (path === "/dashboard" && token) {
+    if (userRole !== "admin") {
+      // Non-admin users trying to access dashboard, redirect to inbox
+      return NextResponse.redirect(new URL("/dashboard/files/inbox", request.url))
+    }
+    // Admin user accessing dashboard - allow
+    return NextResponse.next()
   }
 
+  // Allow all other authenticated requests
   return NextResponse.next()
 }
 

@@ -1,4 +1,5 @@
 "use client"
+
 import type React from "react"
 import { useState } from "react"
 import Link from "next/link"
@@ -9,7 +10,9 @@ import {
   FileText,
   MessageSquare,
   Users,
+  BarChart3,
   Settings,
+  ChevronDown,
   ChevronRight,
   Building2,
   Shield,
@@ -21,9 +24,6 @@ import {
   Bell,
   PenTool,
   User,
-  Sparkles,
-  Crown,
-  Star,
 } from "lucide-react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -45,7 +45,7 @@ interface SidebarProps {
   onNavigate?: () => void
 }
 
-export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: SidebarProps) {
+export default function Sidebar({ user, isMobile = false, onNavigate }: SidebarProps) {
   const pathname = usePathname()
   const [openSections, setOpenSections] = useState<string[]>(["dashboard"])
 
@@ -53,56 +53,20 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
     setOpenSections((prev) => (prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]))
   }
 
-  const getThemeConfig = () => {
+  const getThemeColor = () => {
     switch (user.role) {
       case "admin":
-        return {
-          primary: "from-orange-500 to-amber-500",
-          secondary: "from-orange-50 to-amber-50",
-          accent: "orange-500",
-          text: "orange-700",
-          bg: "orange-50",
-          border: "orange-200",
-          icon: Crown,
-          label: "Administrator",
-        }
+        return "orange"
       case "director":
-        return {
-          primary: "from-red-500 to-rose-500",
-          secondary: "from-red-50 to-rose-50",
-          accent: "red-500",
-          text: "red-700",
-          bg: "red-50",
-          border: "red-200",
-          icon: Shield,
-          label: "General Managing Director",
-        }
+        return "red"
       case "department":
-        return {
-          primary: "from-emerald-500 to-green-500",
-          secondary: "from-emerald-50 to-green-50",
-          accent: "emerald-500",
-          text: "emerald-700",
-          bg: "emerald-50",
-          border: "emerald-200",
-          icon: Star,
-          label: "Department Head",
-        }
+        return "green"
       default:
-        return {
-          primary: "from-blue-500 to-indigo-500",
-          secondary: "from-blue-50 to-indigo-50",
-          accent: "blue-500",
-          text: "blue-700",
-          bg: "blue-50",
-          border: "blue-200",
-          icon: User,
-          label: "Department User",
-        }
+        return "blue"
     }
   }
 
-  const theme = getThemeConfig()
+  const themeColor = getThemeColor()
 
   interface NavItem {
     name: string
@@ -135,17 +99,20 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
       name: "Departments",
       icon: Building2,
       key: "departments",
-      children: [{ name: "Departments", href: "/dashboard/departments", icon: Eye }],
+      children: [
+        // { name: "Create New Department", href: "/dashboard/departments/create", icon: Plus },
+        { name: "Departments", href: "/dashboard/departments", icon: Eye },
+      ],
     },
     {
       name: "Files",
       icon: FileText,
       key: "files",
       children: [
-        // { name: "Create File", href: "/dashboard/files/create", icon: Plus },
+        { name: "Create File", href: "/dashboard/files/create", icon: Plus },
         { name: "All Files", href: "/dashboard/files", icon: Eye },
-        // { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox },
-        // { name: "Shared Files", href: "/dashboard/files/shared", icon: Share2 },
+        { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox, },
+        { name: "Shared Files", href: "/dashboard/files/shared", icon: Share2 },
       ],
     },
     {
@@ -153,11 +120,17 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
       icon: MessageSquare,
       key: "requests",
       children: [
-        // { name: "Create Request", href: "/dashboard/requests/create", icon: Plus },
+        { name: "Create Request", href: "/dashboard/requests/create", icon: Plus },
         { name: "All Requests", href: "/dashboard/requests", icon: Eye },
-        // { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox },
+        { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox },
       ],
     },
+    // {
+    //   name: "Reports",
+    //   href: "/dashboard/reports",
+    //   icon: BarChart3,
+    //   key: "reports",
+    // },
     {
       name: "User Management",
       icon: Users,
@@ -176,23 +149,46 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
         { name: "App Settings", href: "/dashboard/settings/app", icon: Settings },
         { name: "Profile", href: "/dashboard/settings/profile", icon: User },
         { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
+        // { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
       ],
     },
   ]
 
   const directorNavigation: NavItem[] = [
+    // {
+    //   name: "Dashboard",
+    //   href: "/dashboard/director",
+    //   icon: LayoutDashboard,
+    //   key: "dashboard",
+    // },
     {
       name: "Files",
       icon: FileText,
       key: "files",
-      children: [{ name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox }],
+      children: [{ name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox },
+        // { name: "All Files", href: "/dashboard/files", icon: Eye },
+      ],
     },
     {
       name: "Requests",
       icon: MessageSquare,
       key: "requests",
-      children: [{ name: "Review Requests", href: "/dashboard/requests/review", icon: Eye }],
+      children: [{ name: "Review Requests", href: "/dashboard/requests/review", icon: Eye },
+        // { name: "All Requests", href: "/dashboard/requests", icon: Eye },
+      ],
     },
+    // {
+    //   name: "Reports",
+    //   href: "/dashboard/reports",
+    //   icon: BarChart3,
+    //   key: "reports",
+    // },
+    // {
+    //   name: "Team",
+    //   href: "/dashboard/users/departments",
+    //   icon: Users,
+    //   key: "team",
+    // },
     {
       name: "Settings",
       icon: Settings,
@@ -200,18 +196,27 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
       children: [
         { name: "Profile", href: "/dashboard/settings/profile", icon: User },
         { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
+        // { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
       ],
     },
   ]
 
   const departmentNavigation: NavItem[] = [
+    // {
+    //   name: "Dashboard",
+    //   href: "/dashboard/department",
+    //   icon: LayoutDashboard,
+    //   key: "dashboard",
+    // },
     {
       name: "Files",
       icon: FileText,
       key: "files",
       children: [
+        // { name: "Create File", href: "/dashboard/files/create", icon: Plus },
         { name: "My Files", href: "/dashboard/files/myfiles", icon: Eye },
         { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox },
+        // { name: "Shared Files", href: "/dashboard/files/shared", icon: Share2 },
       ],
     },
     {
@@ -238,13 +243,16 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
   ]
 
   const userNavigation: NavItem[] = [
+
     {
       name: "Files",
       icon: FileText,
       key: "files",
       children: [
+        // { name: "Create File", href: "/dashboard/files/create", icon: Plus },
         { name: "My Files", href: "/dashboard/files/myfiles", icon: Eye },
         { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox },
+        // { name: "Shared Files", href: "/dashboard/files/shared", icon: Share2 },
       ],
     },
     {
@@ -264,6 +272,7 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
       children: [
         { name: "Profile", href: "/dashboard/settings/profile", icon: User },
         { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
+        // { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
       ],
     },
   ]
@@ -305,43 +314,34 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
   }
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-gradient-to-b from-white via-slate-50/50 to-slate-100/30">
+    <div className="flex flex-col h-full">
       {/* User Profile Section */}
-      <div className={`relative p-6 bg-gradient-to-br ${theme.primary} text-white overflow-hidden`}>
-        <div className="absolute inset-0 bg-black/10"></div>
-        <div className="absolute -top-4 -right-4 w-24 h-24 bg-white/10 rounded-full"></div>
-        <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-white/5 rounded-full"></div>
-
-        <div className="relative flex items-center space-x-4">
-          <div className="relative">
-            <Avatar className="h-12 w-12 border-2 border-white/30 shadow-lg">
-              <AvatarImage src={user.avatar || "/placeholder.svg?height=48&width=48"} alt="User" />
-              <AvatarFallback className="bg-white/20 text-white font-semibold">
-                {user.firstName?.charAt(0)}
-                {user.lastName?.charAt(0)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="absolute -bottom-1 -right-1 p-1 bg-white rounded-full">
-              <theme.icon className="w-3 h-3 text-slate-600" />
-            </div>
-          </div>
+      <div className="p-4 border-b border-slate-200 bg-slate-50">
+        <div className="flex items-center space-x-3">
+          <Avatar className="h-10 w-10">
+            <AvatarImage src={user.avatar || "/placeholder.svg?height=40&width=40"} alt="User" />
+            <AvatarFallback className={`bg-${themeColor}-100 text-${themeColor}-800`}>
+              {user.firstName?.charAt(0)}
+              {user.lastName?.charAt(0)}
+            </AvatarFallback>
+          </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">
+            <p className="text-sm font-medium text-slate-900 truncate">
               {user.firstName} {user.lastName}
             </p>
-            <p className="text-xs text-white/80 truncate" title={user.email}>
+            <p className="text-xs text-slate-500 truncate" title={user.email}>
               {user.email}
             </p>
-            <Badge className="mt-2 bg-white/20 text-white border-white/30 text-xs">{theme.label}</Badge>
+            {user.position && <p className="text-xs text-slate-400 truncate">{user.position === "Department Staff" ? "Department Head" : user.position}</p>}
           </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <ScrollArea className="flex-1 px-4 py-6">
-        <nav className="space-y-2">
+      <ScrollArea className="flex-1 px-4 py-4">
+        <nav className="space-y-1">
           {navigation.map((item) => (
-            <div key={item.key} className="mb-2">
+            <div key={item.key} className="mb-1">
               {item.children ? (
                 <Collapsible
                   open={openSections.includes(item.key) || hasActiveChild(item.children)}
@@ -349,80 +349,48 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
                 >
                   <CollapsibleTrigger
                     className={cn(
-                      "flex items-center justify-between w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 group hover:shadow-md",
+                      "flex items-center justify-between w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 hover:bg-slate-100",
                       hasActiveChild(item.children)
-                        ? `bg-gradient-to-r ${theme.secondary} text-${theme.text} shadow-sm border border-${theme.border}`
-                        : "text-slate-700 hover:bg-slate-100",
+                        ? `bg-${themeColor}-50 text-${themeColor}-700 border border-${themeColor}-200`
+                        : "text-slate-700",
                     )}
                   >
                     <div className="flex items-center">
-                      <div
-                        className={cn(
-                          "p-2 rounded-lg mr-3 transition-all duration-300",
-                          hasActiveChild(item.children)
-                            ? `bg-${theme.accent}/10`
-                            : "bg-slate-100 group-hover:bg-slate-200",
-                        )}
-                      >
-                        <item.icon
-                          className={cn(
-                            "w-5 h-5 transition-colors duration-300",
-                            hasActiveChild(item.children) ? `text-${theme.accent}` : "text-slate-600",
-                          )}
-                        />
-                      </div>
+                      <item.icon className="w-5 h-5 mr-3 flex-shrink-0" />
                       <span className="truncate">{item.name}</span>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1">
                       {item.badge && (
-                        <Badge variant="secondary" className="h-5 px-2 text-xs bg-slate-200 text-slate-700">
+                        <Badge variant="secondary" className="h-5 px-1.5 text-xs">
                           {item.badge}
                         </Badge>
                       )}
-                      <div
-                        className={cn(
-                          "transition-transform duration-300",
-                          openSections.includes(item.key) || hasActiveChild(item.children) ? "rotate-90" : "",
-                        )}
-                      >
+                      {openSections.includes(item.key) || hasActiveChild(item.children) ? (
+                        <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                      ) : (
                         <ChevronRight className="w-4 h-4 flex-shrink-0" />
-                      </div>
+                      )}
                     </div>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-2 ml-6 space-y-1">
+                  <CollapsibleContent className="mt-1 ml-6 space-y-1">
                     {item.children.map((child) => (
                       <Link
                         key={child.href}
                         href={child.href}
                         onClick={handleLinkClick}
                         className={cn(
-                          "flex items-center justify-between px-4 py-2.5 text-sm rounded-lg transition-all duration-300 group hover:shadow-sm",
+                          "flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all duration-200 hover:bg-slate-100",
                           isActive(child.href)
-                            ? `bg-gradient-to-r ${theme.secondary} text-${theme.text} font-medium shadow-sm border border-${theme.border}`
-                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-800",
+                            ? `bg-${themeColor}-100 text-${themeColor}-700 font-medium border border-${themeColor}-200`
+                            : "text-slate-600",
                         )}
                       >
                         <div className="flex items-center min-w-0">
-                          <div
-                            className={cn(
-                              "p-1.5 rounded-md mr-3 transition-all duration-300",
-                              isActive(child.href) ? `bg-${theme.accent}/10` : "bg-slate-100 group-hover:bg-slate-200",
-                            )}
-                          >
-                            <child.icon
-                              className={cn(
-                                "w-4 h-4 transition-colors duration-300",
-                                isActive(child.href) ? `text-${theme.accent}` : "text-slate-500",
-                              )}
-                            />
-                          </div>
+                          <child.icon className="w-4 h-4 mr-3 flex-shrink-0" />
                           <span className="truncate">{child.name}</span>
                         </div>
                         {child.badge && (
-                          <Badge
-                            variant="secondary"
-                            className="h-4 px-1.5 text-xs ml-2 flex-shrink-0 bg-slate-200 text-slate-700"
-                          >
+                          <Badge variant="secondary" className="h-5 px-1.5 text-xs ml-2 flex-shrink-0">
                             {child.badge}
                           </Badge>
                         )}
@@ -435,33 +403,18 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
                   href={item.href || "#"}
                   onClick={handleLinkClick}
                   className={cn(
-                    "flex items-center justify-between px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 group hover:shadow-md",
+                    "flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 hover:bg-slate-100",
                     isActive(item.href)
-                      ? `bg-gradient-to-r ${theme.secondary} text-${theme.text} shadow-sm border border-${theme.border}`
-                      : "text-slate-700 hover:bg-slate-100",
+                      ? `bg-${themeColor}-100 text-${themeColor}-700 border border-${themeColor}-200`
+                      : "text-slate-700",
                   )}
                 >
                   <div className="flex items-center min-w-0">
-                    <div
-                      className={cn(
-                        "p-2 rounded-lg mr-3 transition-all duration-300",
-                        isActive(item.href) ? `bg-${theme.accent}/10` : "bg-slate-100 group-hover:bg-slate-200",
-                      )}
-                    >
-                      <item.icon
-                        className={cn(
-                          "w-5 h-5 transition-colors duration-300",
-                          isActive(item.href) ? `text-${theme.accent}` : "text-slate-600",
-                        )}
-                      />
-                    </div>
+                    <item.icon className="w-5 h-5 mr-3 flex-shrink-0" />
                     <span className="truncate">{item.name}</span>
                   </div>
                   {item.badge && (
-                    <Badge
-                      variant="secondary"
-                      className="h-5 px-2 text-xs ml-2 flex-shrink-0 bg-slate-200 text-slate-700"
-                    >
+                    <Badge variant="secondary" className="h-5 px-1.5 text-xs ml-2 flex-shrink-0">
                       {item.badge}
                     </Badge>
                   )}
@@ -471,16 +424,6 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
           ))}
         </nav>
       </ScrollArea>
-
-      {/* Footer */}
-      {/* <div className="p-4 border-t border-slate-200 bg-slate-50/50">
-        <div className="flex items-center justify-center">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <Sparkles className="w-3 h-3" />
-            <span>Powered by v0</span>
-          </div>
-        </div>
-      </div> */}
     </div>
   )
 
@@ -489,7 +432,7 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
   }
 
   return (
-    <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-72 bg-white border-r border-slate-200 shadow-lg hidden lg:block">
+    <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-white border-r border-slate-200 hidden lg:block">
       {sidebarContent}
     </div>
   )

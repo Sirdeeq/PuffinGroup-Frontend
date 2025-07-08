@@ -1,5 +1,4 @@
 "use client"
-
 import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -36,6 +35,7 @@ export default function LoginPage() {
   const { login, isAuthenticated, loading, user } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
+
   const [credentials, setCredentials] = useState<LoginCredentials>({
     email: "",
     password: "",
@@ -50,23 +50,24 @@ export default function LoginPage() {
   const [showCheckInModal, setShowCheckInModal] = useState(false)
 
   useEffect(() => {
-    if (!loading && isAuthenticated) {
-      // Get user role from auth context
-      const userRole = localStorage.getItem("userRole") || selectedRole
+    if (!loading && isAuthenticated && user) {
+      // Redirect based on user role from the authenticated user object
+      const userRole = user.role
 
-      // Show check-in modal for regular users, skip for admin and director
-      if (userRole !== "admin" && userRole !== "director") {
+      if (userRole === "admin") {
+        router.push("/dashboard")
+        return
+      }
+
+      // For non-admin users, show check-in modal first (except directors)
+      if (userRole !== "director") {
         setShowCheckInModal(true)
       } else {
-        // Set user role in localStorage and cookies
-        localStorage.setItem("userRole", userRole)
-        document.cookie = `userRole=${userRole}; path=/; max-age=${30 * 24 * 60 * 60}; secure; samesite=strict`
-
-        // Let middleware handle the redirect
-        router.push("/")
+        // Directors go directly to inbox
+        router.push("/dashboard/files/inbox")
       }
     }
-  }, [isAuthenticated, loading, router, selectedRole])
+  }, [isAuthenticated, loading, user, router])
 
   // Show loading spinner while checking authentication
   if (loading) {
@@ -85,40 +86,6 @@ export default function LoginPage() {
     return null
   }
 
-  // const handleLogin = async () => {
-  //   try {
-  //     setIsLoading(true)
-  //     setError(null)
-
-  //     // Validate inputs
-  //     if (!credentials.email || !credentials.password) {
-  //       throw new Error("Please fill in all fields")
-  //     }
-
-  //     await login({
-  //       email: credentials.email,
-  //       password: credentials.password,
-  //       role: selectedRole || "department",
-  //     })
-
-  //     toast({
-  //       title: "Login successful",
-  //       description: "Redirecting to dashboard...",
-  //     })
-  //   } catch (err: any) {
-  //     const errorMessage = err instanceof Error ? err.message : "Login failed"
-  //     setError(errorMessage)
-  //     toast({
-  //       title: "Login Failed",
-  //       description: errorMessage,
-  //       variant: "destructive",
-  //     })
-  //   } finally {
-  //     setIsLoading(false)
-  //   }
-  // }
-
-
   const handleLogin = async () => {
     try {
       setIsLoading(true)
@@ -135,15 +102,15 @@ export default function LoginPage() {
         role: selectedRole || "department",
       })
 
-      // Store user role for redirect logic
-      if (response?.data?.user?.role) {
-        localStorage.setItem("userRole", response.data.user.role)
+      if (response?.success) {
+        toast({
+          title: "Login successful",
+          description:
+            response.data.user.role === "admin"
+              ? "Redirecting to dashboard..."
+              : "Please check in before proceeding...",
+        })
       }
-
-      toast({
-        title: "Login successful",
-        description: "Please check in before proceeding...",
-      })
     } catch (err: any) {
       const errorMessage = err instanceof Error ? err.message : "Login failed"
       setError(errorMessage)
@@ -250,7 +217,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Department User Option - Now Active */}
+        {/* Department User Option */}
         <div
           onClick={() => setSelectedRole("user")}
           className="group relative overflow-hidden rounded-2xl bg-white border-2 border-green-200 hover:border-green-300 p-1 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl shadow-lg"
@@ -401,7 +368,7 @@ export default function LoginPage() {
         description: "Access administrative dashboard with full system control",
         icon: ShieldAlert,
         color: "orange",
-        placeholder: "RC-ADMIN-2025",
+        placeholder: "admin@company.com",
         bgGradient: "from-orange-500 to-orange-600",
       },
       user: {
@@ -447,7 +414,7 @@ export default function LoginPage() {
             <div className="space-y-5">
               <div className="space-y-2">
                 <label className="text-white text-sm font-medium">
-                  {selectedRole === "admin" ? "Access ID" : "Email"}
+                  {selectedRole === "admin" ? "Admin Email" : "Email"}
                 </label>
                 <div className="relative">
                   <Input
@@ -529,21 +496,13 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-16">
       {selectedRole ? renderLoginForm() : renderRoleSelection()}
+
       <CheckInModal
         isOpen={showCheckInModal}
         onClose={() => setShowCheckInModal(false)}
         onSuccess={() => {
-          // After successful check-in, redirect to appropriate dashboard
-          const userRole = localStorage.getItem("userRole") || selectedRole
-          let redirectPath = "/dashboard/files/myfiles"
-
-          if (userRole === "admin") {
-            redirectPath = "/dashboard"
-          } else if (userRole === "director") {
-            redirectPath = "/dashboard/files/inbox"
-          }
-
-          router.push(redirectPath)
+          // After successful check-in, redirect to inbox for all non-admin users
+          router.push("/dashboard/files/inbox")
         }}
       />
     </div>

@@ -1,4 +1,5 @@
 "use client"
+
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -9,7 +10,7 @@ interface User {
   firstName: string
   lastName: string
   email: string
-  role: "admin" | "director" | "department" | "user"
+  role: "admin" | "director" | "department"
   department?: string
   position?: string
   avatar?: string
@@ -19,7 +20,7 @@ interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   loading: boolean
-  login: (credentials: { email: string; password: string; role: string }) => Promise<any>
+  login: (credentials: { email: string; password: string; role: string }) => Promise<void>
   logout: () => void
   getUser: () => Promise<void>
 }
@@ -39,9 +40,7 @@ const setToken = (token: string) => {
 const removeToken = () => {
   if (typeof window !== "undefined") {
     localStorage.removeItem("token")
-    localStorage.removeItem("userRole")
     document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
-    document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
   }
 }
 
@@ -81,17 +80,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(response.token)
         setUser(response.data.user)
         setIsAuthenticated(true)
-
+        
         // Store user role in localStorage and cookies
         localStorage.setItem("userRole", response.data.user.role)
         document.cookie = `userRole=${response.data.user.role}; path=/; max-age=${30 * 24 * 60 * 60}; secure; samesite=strict`
 
-        // Return success with user data
+        // For admin, redirect to dashboard
+        if (response.data.user.role === "admin") {
+          return {
+            success: true,
+            data: {
+              user: response.data.user
+            }
+          }
+        }
+        
+        // For other roles, return success but let middleware handle redirection
         return {
           success: true,
           data: {
-            user: response.data.user,
-          },
+            user: response.data.user
+          }
         }
       } else {
         throw new Error(response.message || "Invalid credentials")
@@ -110,15 +119,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const getUser = async () => {
     try {
       const response = await authApi.getUser()
+
       if (response.success && response.user) {
         setUser(response.user)
         setIsAuthenticated(true)
-
-        // Ensure user role is stored
-        if (response.user.role) {
-          localStorage.setItem("userRole", response.user.role)
-          document.cookie = `userRole=${response.user.role}; path=/; max-age=${30 * 24 * 60 * 60}; secure; samesite=strict`
-        }
       } else {
         // If getUser fails, clear token and user state
         removeToken()
