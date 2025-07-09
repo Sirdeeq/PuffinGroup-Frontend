@@ -72,6 +72,16 @@ export function CheckInModal({ isOpen, onClose, onSuccess }: CheckInModalProps) 
     }
   }
 
+  const handleSkipCheckIn = () => {
+    toast({
+      title: "Skipped Check-in",
+      description: "You can check in later from the dashboard.",
+      variant: "default",
+    })
+    onSuccess()
+    onClose()
+  }
+
   const resetForm = () => {
     setLocation("")
     setNotes("")
@@ -135,7 +145,19 @@ export function CheckInModal({ isOpen, onClose, onSuccess }: CheckInModalProps) 
             <Button variant="outline" onClick={handleClose} disabled={isLoading}>
               Cancel
             </Button>
-            <Button onClick={() => handleCheckIn(false)} disabled={isLoading || !location}>
+            <Button
+              onClick={handleSkipCheckIn}
+              variant="outline"
+              className="bg-gray-100 hover:bg-gray-200"
+              disabled={isLoading}
+            >
+              Skip & Continue
+            </Button>
+            <Button
+              onClick={() => handleCheckIn(false)}
+              disabled={isLoading || !location}
+              className="ml-2"
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />

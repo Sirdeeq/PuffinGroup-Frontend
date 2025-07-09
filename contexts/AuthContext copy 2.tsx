@@ -1,5 +1,4 @@
 "use client"
-
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -80,17 +79,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.success && response.token) {
         setToken(response.token)
-
-        // Update state immediately
         setUser(response.data.user)
         setIsAuthenticated(true)
 
         // Store user role in localStorage and cookies
         localStorage.setItem("userRole", response.data.user.role)
         document.cookie = `userRole=${response.data.user.role}; path=/; max-age=${30 * 24 * 60 * 60}; secure; samesite=strict`
-
-        // Small delay to ensure state updates are complete
-        await new Promise(resolve => setTimeout(resolve, 300))
 
         // Return success with user data
         return {
@@ -104,11 +98,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error: unknown) {
       console.error("Login error:", error)
-      // Reset state on error
-      setUser(null)
-      setIsAuthenticated(false)
-      removeToken()
-
       if (error instanceof Error) {
         throw error
       }
@@ -150,7 +139,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     removeToken()
     setUser(null)
     setIsAuthenticated(false)
-    // Use window.location for logout to ensure complete redirect
     window.location.href = "/login"
   }
 

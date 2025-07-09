@@ -5,6 +5,9 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get("token")?.value || ""
   const path = request.nextUrl.pathname
   const userRole = request.cookies.get("userRole")?.value
+  
+  // Add a small delay to ensure cookie updates are processed
+  await new Promise(resolve => setTimeout(resolve, 100))
 
   // Public paths that don't require authentication
   const publicPaths = ["/", "/login"]
@@ -33,7 +36,13 @@ export async function middleware(request: NextRequest) {
   // Handle redirects when user is logged in and accessing public paths
   if ((publicPaths.includes(path) || path === "/") && token) {
     const redirectPath = getRedirectPath(userRole)
-    return NextResponse.redirect(new URL(redirectPath, request.url))
+    // Add a small delay before redirect to ensure proper state updates
+    const redirectResponse = new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(NextResponse.redirect(new URL(redirectPath, request.url)))
+      }, 100)
+    })
+    return redirectResponse
   }
 
   // Admin-only routes protection

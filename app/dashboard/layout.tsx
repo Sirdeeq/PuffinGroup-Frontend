@@ -45,23 +45,20 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-slate-50">
+      {/* Top Navigation - Fixed */}
       <TopNavbar user={user} />
 
-      {/* Desktop Layout */}
-      <div className="hidden lg:flex">
-        <Sidebar user={user} />
-        <main className="flex-1 ml-64 pt-16">
-          <div className="p-6 max-w-7xl mx-auto">
-            <div className="min-h-[calc(100vh-7rem)]">{children}</div>
-          </div>
-        </main>
-      </div>
+      {/* Main Layout Container */}
+      <div className="flex h-screen pt-16">
+        {/* Desktop Sidebar - Fixed */}
+        <div className="hidden lg:block">
+          <Sidebar user={user} />
+        </div>
 
-      {/* Mobile Layout */}
-      <div className="lg:hidden">
-        <main className="pt-16">
-          <div className="p-4">
-            <div className="min-h-[calc(100vh-5rem)]">{children}</div>
+        {/* Main Content Area */}
+        <main className="flex-1 lg:ml-72 overflow-auto">
+          <div className="container mx-auto p-4 lg:p-6 max-w-7xl">
+            <div className="min-h-[calc(100vh-8rem)]">{children}</div>
           </div>
         </main>
       </div>

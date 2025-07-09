@@ -1,5 +1,4 @@
 "use client"
-
 import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -36,11 +35,12 @@ export default function LoginPage() {
   const { login, isAuthenticated, loading, user } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
+
   const [credentials, setCredentials] = useState<LoginCredentials>({
     email: "",
     password: "",
   })
-  const [isLogging, setIsLogging] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedRole, setSelectedRole] = useState<RoleType | null>(null)
   const [showAdminAccess, setShowAdminAccess] = useState(false)
@@ -49,60 +49,53 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showCheckInModal, setShowCheckInModal] = useState(false)
 
-  // Simple redirect function
-  const redirectUser = (userRole: string) => {
-    console.log("Redirecting user with role:", userRole)
-
-    if (userRole === "admin") {
-      window.location.href = "/dashboard"
-      return
-    }
-
-    if (userRole === "director") {
-      window.location.href = "/dashboard/files/inbox"
-      return
-    }
-
-    // For department heads and users, show check-in modal first
-    if (userRole === "department" || userRole === "user") {
-      setShowCheckInModal(true)
-      return
-    }
-
-    // Fallback redirect
-    window.location.href = "/dashboard/files/inbox"
-  }
-
-  // Handle existing authentication
   useEffect(() => {
     if (!loading && isAuthenticated && user) {
-      console.log("User already authenticated:", user.role)
-      redirectUser(user.role)
-    }
-  }, [isAuthenticated, loading, user])
+      // Redirect based on user role from the authenticated user object
+      const userRole = user.role
 
-  // Show loading while checking auth
+      if (userRole === "admin") {
+        router.push("/dashboard")
+        return
+      }
+
+      // For non-admin users, show check-in modal first (except directors)
+      if (userRole !== "director") {
+        setShowCheckInModal(true)
+      } else {
+        // Directors go directly to inbox
+        router.push("/dashboard/files/inbox")
+      }
+    }
+  }, [isAuthenticated, loading, user, router])
+
+  // Show loading spinner while checking authentication
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
         <div className="flex flex-col items-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-          <p className="mt-4 text-gray-700">Checking authentication...</p>
+          <p className="mt-4 text-gray-700">Checking authentication status...</p>
         </div>
       </div>
     )
   }
 
+  // Don't render if authenticated (will redirect)
+  if (isAuthenticated) {
+    return null
+  }
+
   const handleLogin = async () => {
     try {
-      setIsLogging(true)
+      setIsLoading(true)
       setError(null)
 
+      // Validate inputs
       if (!credentials.email || !credentials.password) {
         throw new Error("Please fill in all fields")
       }
 
-      console.log("Attempting login...")
       const response = await login({
         email: credentials.email,
         password: credentials.password,
@@ -110,21 +103,15 @@ export default function LoginPage() {
       })
 
       if (response?.success) {
-        const userRole = response.data.user.role
-        console.log("Login successful, user role:", userRole)
-
         toast({
           title: "Login successful",
-          description: "Redirecting...",
+          description:
+            response.data.user.role === "admin"
+              ? "Redirecting to dashboard..."
+              : "Please check in before proceeding...",
         })
-
-        // Redirect immediately after successful login
-        setTimeout(() => {
-          redirectUser(userRole)
-        }, 1000)
       }
     } catch (err: any) {
-      console.error("Login error:", err)
       const errorMessage = err instanceof Error ? err.message : "Login failed"
       setError(errorMessage)
       toast({
@@ -133,7 +120,7 @@ export default function LoginPage() {
         variant: "destructive",
       })
     } finally {
-      setIsLogging(false)
+      setIsLoading(false)
     }
   }
 
@@ -142,16 +129,18 @@ export default function LoginPage() {
       ...prev,
       [field]: value,
     }))
+    // Clear error when user starts typing
     if (error) setError(null)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !isLogging) {
+    if (e.key === "Enter" && !isLoading) {
       handleLogin()
     }
   }
 
   const handleAdminAccess = () => {
+    // This would be a secure company code in a real application
     if (adminKeycode === "PG-ADMIN-2025") {
       setAdminAccessStep(2)
     } else {
@@ -161,11 +150,6 @@ export default function LoginPage() {
         variant: "destructive",
       })
     }
-  }
-
-  const handleCheckInSuccess = () => {
-    setShowCheckInModal(false)
-    window.location.href = "/dashboard/files/inbox"
   }
 
   const renderRoleSelection = () => (
@@ -440,7 +424,7 @@ export default function LoginPage() {
                     onChange={(e) => updateCredentials("email", e.target.value)}
                     onKeyPress={handleKeyPress}
                     className="bg-white/90 border-white/50 text-gray-800 placeholder:text-gray-500 pl-10"
-                    disabled={isLogging}
+                    disabled={isLoading}
                   />
                   <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
                     {selectedRole === "admin" ? (
@@ -461,7 +445,7 @@ export default function LoginPage() {
                     onChange={(e) => updateCredentials("password", e.target.value)}
                     onKeyPress={handleKeyPress}
                     className="bg-white/90 border-white/50 text-gray-800 pl-10 pr-10"
-                    disabled={isLogging}
+                    disabled={isLoading}
                   />
                   <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
                     <Lock className="w-4 h-4 text-gray-500" />
@@ -481,9 +465,9 @@ export default function LoginPage() {
               <Button
                 onClick={handleLogin}
                 className="w-full bg-white text-gray-800 hover:bg-gray-100 py-6 font-medium"
-                disabled={isLogging}
+                disabled={isLoading}
               >
-                {isLogging ? (
+                {isLoading ? (
                   <div className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span>Authenticating...</span>
@@ -499,12 +483,7 @@ export default function LoginPage() {
           </div>
 
           <div className="p-4 bg-gray-50 flex justify-between items-center">
-            <Button
-              variant="ghost"
-              className="text-gray-600 hover:bg-gray-100"
-              onClick={() => setSelectedRole(null)}
-              disabled={isLogging}
-            >
+            <Button variant="ghost" className="text-gray-600 hover:bg-gray-100" onClick={() => setSelectedRole(null)}>
               Back to Role Selection
             </Button>
             <p className="text-gray-500 text-xs">Secure Login</p>
@@ -521,7 +500,10 @@ export default function LoginPage() {
       <CheckInModal
         isOpen={showCheckInModal}
         onClose={() => setShowCheckInModal(false)}
-        onSuccess={handleCheckInSuccess}
+        onSuccess={() => {
+          // After successful check-in, redirect to inbox for all non-admin users
+          router.push("/dashboard/files/inbox")
+        }}
       />
     </div>
   )

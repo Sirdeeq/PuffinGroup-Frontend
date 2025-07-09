@@ -1,4 +1,5 @@
 "use client"
+
 import type React from "react"
 import { useState } from "react"
 import Link from "next/link"
@@ -15,13 +16,11 @@ import {
   Shield,
   UserCheck,
   Inbox,
-  Share2,
   Plus,
   Eye,
   Bell,
   PenTool,
   User,
-  Sparkles,
   Crown,
   Star,
 } from "lucide-react"
@@ -58,44 +57,44 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
       case "admin":
         return {
           primary: "from-orange-500 to-amber-500",
-          secondary: "from-orange-50 to-amber-50",
-          accent: "orange-500",
-          text: "orange-700",
-          bg: "orange-50",
-          border: "orange-200",
+          secondary: "bg-orange-50",
+          accent: "text-orange-600",
+          accentBg: "bg-orange-100",
+          text: "text-orange-700",
+          border: "border-orange-200",
           icon: Crown,
           label: "Administrator",
         }
       case "director":
         return {
           primary: "from-red-500 to-rose-500",
-          secondary: "from-red-50 to-rose-50",
-          accent: "red-500",
-          text: "red-700",
-          bg: "red-50",
-          border: "red-200",
+          secondary: "bg-red-50",
+          accent: "text-red-600",
+          accentBg: "bg-red-100",
+          text: "text-red-700",
+          border: "border-red-200",
           icon: Shield,
           label: "General Managing Director",
         }
       case "department":
         return {
           primary: "from-emerald-500 to-green-500",
-          secondary: "from-emerald-50 to-green-50",
-          accent: "emerald-500",
-          text: "emerald-700",
-          bg: "emerald-50",
-          border: "emerald-200",
+          secondary: "bg-emerald-50",
+          accent: "text-emerald-600",
+          accentBg: "bg-emerald-100",
+          text: "text-emerald-700",
+          border: "border-emerald-200",
           icon: Star,
           label: "Department Head",
         }
       default:
         return {
           primary: "from-blue-500 to-indigo-500",
-          secondary: "from-blue-50 to-indigo-50",
-          accent: "blue-500",
-          text: "blue-700",
-          bg: "blue-50",
-          border: "blue-200",
+          secondary: "bg-blue-50",
+          accent: "text-blue-600",
+          accentBg: "bg-blue-100",
+          text: "text-blue-700",
+          border: "border-blue-200",
           icon: User,
           label: "Department User",
         }
@@ -141,22 +140,13 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
       name: "Files",
       icon: FileText,
       key: "files",
-      children: [
-        // { name: "Create File", href: "/dashboard/files/create", icon: Plus },
-        { name: "All Files", href: "/dashboard/files", icon: Eye },
-        // { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox },
-        // { name: "Shared Files", href: "/dashboard/files/shared", icon: Share2 },
-      ],
+      children: [{ name: "All Files", href: "/dashboard/files", icon: Eye }],
     },
     {
       name: "Requests",
       icon: MessageSquare,
       key: "requests",
-      children: [
-        // { name: "Create Request", href: "/dashboard/requests/create", icon: Plus },
-        { name: "All Requests", href: "/dashboard/requests", icon: Eye },
-        // { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox },
-      ],
+      children: [{ name: "All Requests", href: "/dashboard/requests", icon: Eye }],
     },
     {
       name: "User Management",
@@ -305,13 +295,12 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
   }
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-gradient-to-b from-white via-slate-50/50 to-slate-100/30">
+    <div className="flex flex-col h-full bg-white">
       {/* User Profile Section */}
       <div className={`relative p-6 bg-gradient-to-br ${theme.primary} text-white overflow-hidden`}>
         <div className="absolute inset-0 bg-black/10"></div>
         <div className="absolute -top-4 -right-4 w-24 h-24 bg-white/10 rounded-full"></div>
         <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-white/5 rounded-full"></div>
-
         <div className="relative flex items-center space-x-4">
           <div className="relative">
             <Avatar className="h-12 w-12 border-2 border-white/30 shadow-lg">
@@ -351,7 +340,7 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
                     className={cn(
                       "flex items-center justify-between w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 group hover:shadow-md",
                       hasActiveChild(item.children)
-                        ? `bg-gradient-to-r ${theme.secondary} text-${theme.text} shadow-sm border border-${theme.border}`
+                        ? `${theme.secondary} ${theme.text} shadow-sm ${theme.border} border`
                         : "text-slate-700 hover:bg-slate-100",
                     )}
                   >
@@ -359,15 +348,13 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
                       <div
                         className={cn(
                           "p-2 rounded-lg mr-3 transition-all duration-300",
-                          hasActiveChild(item.children)
-                            ? `bg-${theme.accent}/10`
-                            : "bg-slate-100 group-hover:bg-slate-200",
+                          hasActiveChild(item.children) ? theme.accentBg : "bg-slate-100 group-hover:bg-slate-200",
                         )}
                       >
                         <item.icon
                           className={cn(
                             "w-5 h-5 transition-colors duration-300",
-                            hasActiveChild(item.children) ? `text-${theme.accent}` : "text-slate-600",
+                            hasActiveChild(item.children) ? theme.accent : "text-slate-600",
                           )}
                         />
                       </div>
@@ -398,7 +385,7 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
                         className={cn(
                           "flex items-center justify-between px-4 py-2.5 text-sm rounded-lg transition-all duration-300 group hover:shadow-sm",
                           isActive(child.href)
-                            ? `bg-gradient-to-r ${theme.secondary} text-${theme.text} font-medium shadow-sm border border-${theme.border}`
+                            ? `${theme.secondary} ${theme.text} font-medium shadow-sm ${theme.border} border`
                             : "text-slate-600 hover:bg-slate-50 hover:text-slate-800",
                         )}
                       >
@@ -406,13 +393,13 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
                           <div
                             className={cn(
                               "p-1.5 rounded-md mr-3 transition-all duration-300",
-                              isActive(child.href) ? `bg-${theme.accent}/10` : "bg-slate-100 group-hover:bg-slate-200",
+                              isActive(child.href) ? theme.accentBg : "bg-slate-100 group-hover:bg-slate-200",
                             )}
                           >
                             <child.icon
                               className={cn(
                                 "w-4 h-4 transition-colors duration-300",
-                                isActive(child.href) ? `text-${theme.accent}` : "text-slate-500",
+                                isActive(child.href) ? theme.accent : "text-slate-500",
                               )}
                             />
                           </div>
@@ -437,7 +424,7 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
                   className={cn(
                     "flex items-center justify-between px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 group hover:shadow-md",
                     isActive(item.href)
-                      ? `bg-gradient-to-r ${theme.secondary} text-${theme.text} shadow-sm border border-${theme.border}`
+                      ? `${theme.secondary} ${theme.text} shadow-sm ${theme.border} border`
                       : "text-slate-700 hover:bg-slate-100",
                   )}
                 >
@@ -445,13 +432,13 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
                     <div
                       className={cn(
                         "p-2 rounded-lg mr-3 transition-all duration-300",
-                        isActive(item.href) ? `bg-${theme.accent}/10` : "bg-slate-100 group-hover:bg-slate-200",
+                        isActive(item.href) ? theme.accentBg : "bg-slate-100 group-hover:bg-slate-200",
                       )}
                     >
                       <item.icon
                         className={cn(
                           "w-5 h-5 transition-colors duration-300",
-                          isActive(item.href) ? `text-${theme.accent}` : "text-slate-600",
+                          isActive(item.href) ? theme.accent : "text-slate-600",
                         )}
                       />
                     </div>
@@ -471,16 +458,6 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
           ))}
         </nav>
       </ScrollArea>
-
-      {/* Footer */}
-      {/* <div className="p-4 border-t border-slate-200 bg-slate-50/50">
-        <div className="flex items-center justify-center">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <Sparkles className="w-3 h-3" />
-            <span>Powered by v0</span>
-          </div>
-        </div>
-      </div> */}
     </div>
   )
 
@@ -489,7 +466,7 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
   }
 
   return (
-    <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-72 bg-white border-r border-slate-200 shadow-lg hidden lg:block">
+    <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-72 bg-white border-r border-slate-200 shadow-lg z-40">
       {sidebarContent}
     </div>
   )

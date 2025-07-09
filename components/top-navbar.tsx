@@ -1,5 +1,9 @@
 "use client"
+
+import { cn } from "@/lib/utils"
+
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -12,12 +16,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Bell, LogOut, Settings, User, Menu, Crown, Shield, Star, Sparkles } from "lucide-react"
+import { Bell, LogOut, User, Menu, Crown, Shield, Star } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { Logo } from "@/components/logo"
 import EnhancedSidebar from "@/components/sidebar"
 import { AttendanceWidget } from "@/components/attendance/attendance-widget"
-import router from "next/router"
 
 interface UserType {
   id: string
@@ -36,6 +39,7 @@ interface TopNavbarProps {
 
 export default function EnhancedTopNavbar({ user }: TopNavbarProps) {
   const { logout } = useAuth()
+  const router = useRouter()
   const [notifications] = useState(0) // Mock notification count
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -44,11 +48,11 @@ export default function EnhancedTopNavbar({ user }: TopNavbarProps) {
       case "admin":
         return {
           primary: "from-orange-500 to-amber-500",
-          secondary: "from-orange-50 to-amber-50",
-          accent: "orange-500",
-          text: "orange-700",
-          bg: "orange-50",
-          border: "orange-200",
+          secondary: "bg-orange-50",
+          accent: "text-orange-600",
+          accentBg: "bg-orange-100",
+          text: "text-orange-700",
+          border: "border-orange-200",
           icon: Crown,
           label: "Administrator",
           description: "System Administrator",
@@ -56,11 +60,11 @@ export default function EnhancedTopNavbar({ user }: TopNavbarProps) {
       case "director":
         return {
           primary: "from-red-500 to-rose-500",
-          secondary: "from-red-50 to-rose-50",
-          accent: "red-500",
-          text: "red-700",
-          bg: "red-50",
-          border: "red-200",
+          secondary: "bg-red-50",
+          accent: "text-red-600",
+          accentBg: "bg-red-100",
+          text: "text-red-700",
+          border: "border-red-200",
           icon: Shield,
           label: "Director",
           description: "General Managing Director",
@@ -68,11 +72,11 @@ export default function EnhancedTopNavbar({ user }: TopNavbarProps) {
       case "department":
         return {
           primary: "from-emerald-500 to-green-500",
-          secondary: "from-emerald-50 to-green-50",
-          accent: "emerald-500",
-          text: "emerald-700",
-          bg: "emerald-50",
-          border: "emerald-200",
+          secondary: "bg-emerald-50",
+          accent: "text-emerald-600",
+          accentBg: "bg-emerald-100",
+          text: "text-emerald-700",
+          border: "border-emerald-200",
           icon: Star,
           label: "Department Head",
           description: "Department Head",
@@ -80,11 +84,11 @@ export default function EnhancedTopNavbar({ user }: TopNavbarProps) {
       default:
         return {
           primary: "from-blue-500 to-indigo-500",
-          secondary: "from-blue-50 to-indigo-50",
-          accent: "blue-500",
-          text: "blue-700",
-          bg: "blue-50",
-          border: "blue-200",
+          secondary: "bg-blue-50",
+          accent: "text-blue-600",
+          accentBg: "bg-blue-100",
+          text: "text-blue-700",
+          border: "border-blue-200",
           icon: User,
           label: "User",
           description: "Department User",
@@ -93,8 +97,6 @@ export default function EnhancedTopNavbar({ user }: TopNavbarProps) {
   }
 
   const theme = getThemeConfig()
-
-  
 
   return (
     <>
@@ -117,13 +119,14 @@ export default function EnhancedTopNavbar({ user }: TopNavbarProps) {
               <Logo size="md" showText={false} />
               <div className="hidden sm:block">
                 <div
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r ${theme.secondary} border border-${theme.border}`}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-full border",
+                    theme.secondary,
+                    theme.border,
+                  )}
                 >
-                  <theme.icon className={`w-4 h-4 text-${theme.accent}`} />
-                  <Badge
-                    variant="outline"
-                    className={`text-${theme.text} border-${theme.border} bg-white/50 text-xs font-medium`}
-                  >
+                  <theme.icon className={cn("w-4 h-4", theme.accent)} />
+                  <Badge variant="outline" className={cn("bg-white/50 text-xs font-medium", theme.text, theme.border)}>
                     {theme.label}
                   </Badge>
                 </div>
@@ -167,7 +170,7 @@ export default function EnhancedTopNavbar({ user }: TopNavbarProps) {
                       </AvatarFallback>
                     </Avatar>
                     <div className="absolute -bottom-0.5 -right-0.5 p-0.5 bg-white rounded-full shadow-sm">
-                      <theme.icon className={`w-3 h-3 text-${theme.accent}`} />
+                      <theme.icon className={cn("w-3 h-3", theme.accent)} />
                     </div>
                   </div>
                 </Button>
@@ -212,34 +215,24 @@ export default function EnhancedTopNavbar({ user }: TopNavbarProps) {
                     </div>
                   </div>
 
-                  <DropdownMenuItem className="p-3 hover:bg-slate-50 rounded-lg transition-colors" onClick={() => router.push("/dashboard/settings/profile")}>
+                  <DropdownMenuItem
+                    className="p-3 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+                    onClick={() => router.push("/dashboard/settings/profile")}
+                  >
                     <User className="mr-3 h-4 w-4 text-slate-600" />
                     <span className="font-medium">Profile Settings</span>
                   </DropdownMenuItem>
-
-                  {/* <DropdownMenuItem className="p-3 hover:bg-slate-50 rounded-lg transition-colors" onClick={() => router.push("/dashboard/settings/preferences")}>
-                    <Settings className="mr-3 h-4 w-4 text-slate-600" />
-                    <span className="font-medium">Preferences</span>
-                  </DropdownMenuItem> */}
 
                   <DropdownMenuSeparator className="my-2" />
 
                   <DropdownMenuItem
                     onClick={logout}
-                    className="p-3 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors focus:text-red-600 focus:bg-red-50"
+                    className="p-3 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors focus:text-red-600 focus:bg-red-50 cursor-pointer"
                   >
                     <LogOut className="mr-3 h-4 w-4" />
                     <span className="font-medium">Sign Out</span>
                   </DropdownMenuItem>
                 </div>
-
-                {/* Footer */}
-                {/* <div className="p-3 border-t border-slate-100 bg-slate-50/50">
-                  <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
-                    <Sparkles className="w-3 h-3" />
-                    <span>Powered by v0</span>
-                  </div>
-                </div> */}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
