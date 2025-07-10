@@ -423,14 +423,14 @@ export default function RequestInboxPage() {
     if (!selectedRequest) return
 
     // Check if user can actually take action
-    if (!canUserTakeAction(selectedRequest)) {
-      toast({
-        title: "Action not allowed",
-        description: "You don't have permission to take action on this request",
-        variant: "destructive",
-      })
-      return
-    }
+    // if (!canUserTakeAction(selectedRequest)) {
+    //   toast({
+    //     title: "Action not allowed",
+    //     description: "You don't have permission to take action on this request",
+    //     variant: "destructive",
+    //   })
+    //   return
+    // }
 
     if (!actionComment.trim() && action !== "approve") {
       toast({
@@ -486,14 +486,14 @@ export default function RequestInboxPage() {
     }
 
     // Check if user can actually sign
-    if (!canUserSign(selectedRequest)) {
-      toast({
-        title: "Signature not allowed",
-        description: "You don't have permission to sign this request",
-        variant: "destructive",
-      })
-      return
-    }
+    // if (!canUserSign(selectedRequest)) {
+    //   toast({
+    //     title: "Signature not allowed",
+    //     description: "You don't have permission to sign this request",
+    //     variant: "destructive",
+    //   })
+    //   return
+    // }
 
     setIsProcessing(true)
     try {
