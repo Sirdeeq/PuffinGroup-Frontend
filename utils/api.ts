@@ -17,8 +17,8 @@ interface User {
 }
 
 // Define API endpoints
-// export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend.onrender.com"
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend.onrender.com"
+// export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
 // Create an axios instance with default config
 const apiClient = axios.create({
@@ -387,8 +387,8 @@ export const api = {
     return ApiClient.getInstance().uploadFormData(`/api/files/${id}/version`, formData, authContext)
   },
 
-   // Files
-   getFiles: async (params?: { status?: string; department?: string; category?: string; folderId?: string }, authContext?: ReturnType<typeof useAuth>) => {
+  // Files
+  getFiles: async (params?: { status?: string; department?: string; category?: string; folderId?: string }, authContext?: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get("/api/files", params, authContext)
   },
 
