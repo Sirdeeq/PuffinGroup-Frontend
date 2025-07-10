@@ -300,8 +300,8 @@ export default function FileUploadForm({
         </Button>
         <Button
           type="submit"
-          disabled={isUploading || !selectedFile}
-          className={`flex-1 bg-${themeColors.primary} hover:bg-${themeColors.primaryHover} text-white`}
+          disabled={isUploading}
+          className={`flex-1 ${themeColors.primary} hover:${themeColors.primaryHover} text-white`}
         >
           {isUploading ? (
             <>

@@ -17,8 +17,8 @@ interface User {
 }
 
 // Define API endpoints
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend.onrender.com"
-// export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+// export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend.onrender.com"
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
 // Create an axios instance with default config
 const apiClient = axios.create({
@@ -512,6 +512,10 @@ export const api = {
 
   takeRequestAction: async (id: string, actionData: any, authContext: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().put(`/api/requests/${id}/action`, actionData, authContext)
+  },
+
+  submitSignature: async (id: string, signatureData: any, authContext: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().post(`/api/requests/${id}/signature`, signatureData, authContext)
   },
 
   addRequestComment: async (id: string, commentData: any, authContext: ReturnType<typeof useAuth>) => {
