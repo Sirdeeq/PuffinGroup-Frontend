@@ -23,6 +23,8 @@ import {
   User,
   Crown,
   Star,
+  Wallet,
+  Video,
 } from "lucide-react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -168,6 +170,22 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
         { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
       ],
     },
+    {
+      name: "Finance",
+      icon: Wallet,
+      key: "finance",
+      children: [
+        { name: "Petty Cash", href: "/dashboard/finance/pettycash", icon: Settings },
+        // { name: "Expenses", href: "/dashboard/finance/expenses", icon: User },
+        // { name: "Invoices", href: "/dashboard/finance/invoices", icon: PenTool },
+      ],
+    },
+    {
+      name: "Meeting",
+      icon: Video,
+      key: "meeting",
+      href: "/dashboard/meeting",
+    },
   ]
 
   const directorNavigation: NavItem[] = [
@@ -191,6 +209,22 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
         { name: "Profile", href: "/dashboard/settings/profile", icon: User },
         { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
       ],
+    },
+    {
+      name: "Finance",
+      icon: Wallet,
+      key: "finance",
+      children: [
+        { name: "Petty Cash", href: "/dashboard/finance/pettycash", icon: Wallet },
+        // { name: "Expenses", href: "/dashboard/finance/expenses", icon: User },
+        // { name: "Invoices", href: "/dashboard/finance/invoices", icon: PenTool },
+      ],
+    },
+    {
+      name: "Meeting",
+      icon: Video,
+      key: "meeting",
+      href: "/dashboard/meeting",
     },
   ]
 
@@ -224,6 +258,22 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
         { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
         { name: "User Management", href: "/dashboard/settings/usermanagement", icon: Users },
       ],
+    },
+    {
+      name: "Finance",
+      icon: Wallet,
+      key: "finance",
+      children: [
+        { name: "Petty Cash", href: "/dashboard/finance/pettycash", icon: Wallet },
+        // { name: "Expenses", href: "/dashboard/finance/expenses", icon: User },
+        // { name: "Invoices", href: "/dashboard/finance/invoices", icon: PenTool },
+      ],
+    },
+    {
+      name: "Meeting",
+      icon: Video,
+      key: "meeting",
+      href: "/dashboard/meeting",
     },
   ]
 
