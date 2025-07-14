@@ -17,8 +17,8 @@ interface User {
 }
 
 // Define API endpoints
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend.onrender.com"
-// export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+// export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend.onrender.com"
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
 // Create an axios instance with default config
 const apiClient = axios.create({
@@ -420,29 +420,90 @@ export const api = {
     return ApiClient.getInstance().post(`/api/files/${id}/signature`, signatureData, authContext)
   },
 
-  // Folders
-  getFolders: async (authContext?: ReturnType<typeof useAuth>) => {
-    return ApiClient.getInstance().get("/api/folders", undefined, authContext)
+  // // Folders
+  // getFolders: async (authContext?: ReturnType<typeof useAuth>) => {
+  //   return ApiClient.getInstance().get("/api/folders", undefined, authContext)
+  // },
+
+  // getFolder: async (id: string, authContext?: ReturnType<typeof useAuth>) => {
+  //   return ApiClient.getInstance().get(`/api/folders/${id}`, undefined, authContext)
+  // },
+
+  // createFolder: async (data: any, authContext?: ReturnType<typeof useAuth>) => {
+  //   return ApiClient.getInstance().post("/api/folders", data, authContext)
+  // },
+
+  // updateFolder: async (id: string, data: any, authContext?: ReturnType<typeof useAuth>) => {
+  //   return ApiClient.getInstance().put(`/api/folders/${id}`, data, authContext)
+  // },
+
+  // deleteFolder: async (id: string, authContext?: ReturnType<typeof useAuth>) => {
+  //   return ApiClient.getInstance().delete(`/api/folders/${id}`, authContext)
+  // },
+
+  // shareFolder: async (id: string, shareData: any, authContext?: ReturnType<typeof useAuth>) => {
+  //   return ApiClient.getInstance().post(`/api/folders/${id}/share`, shareData, authContext)
+  // },
+
+  // Folders API methods
+  getFolders: async (params?: {
+    parentId?: string;
+    type?: "public" | "private";
+  }, authContext?: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().get("/api/folders", params, authContext);
   },
 
   getFolder: async (id: string, authContext?: ReturnType<typeof useAuth>) => {
-    return ApiClient.getInstance().get(`/api/folders/${id}`, undefined, authContext)
+    return ApiClient.getInstance().get(`/api/folders/${id}`, undefined, authContext);
   },
 
-  createFolder: async (data: any, authContext?: ReturnType<typeof useAuth>) => {
-    return ApiClient.getInstance().post("/api/folders", data, authContext)
+  createFolder: async (data: {
+    name: string;
+    description?: string;
+    departments?: string[];
+    accessLevel?: "public" | "department" | "private";
+    parentFolderId?: string;
+    isPublic?: boolean;
+  }, authContext?: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().post("/api/folders", data, authContext);
   },
 
-  updateFolder: async (id: string, data: any, authContext?: ReturnType<typeof useAuth>) => {
-    return ApiClient.getInstance().put(`/api/folders/${id}`, data, authContext)
+  updateFolder: async (id: string, data: {
+    name?: string;
+    description?: string;
+    departments?: string[];
+    accessLevel?: "public" | "department" | "private";
+  }, authContext?: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().put(`/api/folders/${id}`, data, authContext);
   },
 
   deleteFolder: async (id: string, authContext?: ReturnType<typeof useAuth>) => {
-    return ApiClient.getInstance().delete(`/api/folders/${id}`, authContext)
+    return ApiClient.getInstance().delete(`/api/folders/${id}`, authContext);
   },
 
-  shareFolder: async (id: string, shareData: any, authContext?: ReturnType<typeof useAuth>) => {
-    return ApiClient.getInstance().post(`/api/folders/${id}/share`, shareData, authContext)
+  shareFolder: async (id: string, data: {
+    departments?: string[];
+    users?: string[];
+    permission?: "view" | "edit" | "full";
+    message?: string;
+  }, authContext?: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().post(`/api/folders/${id}/share`, data, authContext);
+  },
+
+  getFolderBreadcrumb: async (id: string, authContext?: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().get(`/api/folders/${id}/breadcrumb`, undefined, authContext);
+  },
+
+  initializeFolderStructure: async (authContext?: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().post("/api/folders/initialize", undefined, authContext);
+  },
+
+  getInboxFolders: async (authContext?: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().get("/api/folders/inbox", undefined, authContext);
+  },
+
+  getFolderFiles: async (id: string, authContext?: ReturnType<typeof useAuth>) => {
+    return ApiClient.getInstance().get(`/api/folders/${id}/files`, undefined, authContext);
   },
 
   // Inbox - Combined files and folders
@@ -450,9 +511,9 @@ export const api = {
     return ApiClient.getInstance().get("/api/files/inbox", undefined, authContext)
   },
 
-  getInboxFolders: async (authContext?: ReturnType<typeof useAuth>) => {
-    return ApiClient.getInstance().get("/api/folders/inbox", undefined, authContext)
-  },
+  // getInboxFolders: async (authContext?: ReturnType<typeof useAuth>) => {
+  //   return ApiClient.getInstance().get("/api/folders/inbox", undefined, authContext)
+  // },
 
   getInboxItems: async (authContext?: ReturnType<typeof useAuth>) => {
     return ApiClient.getInstance().get("/api/inbox", undefined, authContext)

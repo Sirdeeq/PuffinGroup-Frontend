@@ -1,5 +1,4 @@
 "use client"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,16 +9,6 @@ import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
 import { api } from "@/utils/api"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   Inbox,
@@ -27,7 +16,6 @@ import {
   Eye,
   Download,
   PenTool,
-  Loader2,
   Search,
   MoreHorizontal,
   Grid3X3,
@@ -46,12 +34,17 @@ import {
   Lock,
   Users,
   ArrowRight,
-  ArrowLeft,
+  ChevronRight,
+  Clock,
+  Share,
+  ChevronLeft,
+  ExternalLink,
 } from "lucide-react"
 import { redirect, useRouter } from "next/navigation"
 
 interface FileData {
   _id: string
+  id?: string
   name: string
   title: string
   description: string
@@ -61,6 +54,7 @@ interface FileData {
   requiresSignature?: boolean
   folder?: {
     _id: string
+    id?: string
     name: string
     description?: string
   }
@@ -105,6 +99,7 @@ interface FileData {
 
 interface FolderData {
   _id: string
+  id?: string
   name: string
   description: string
   isDefault: boolean
@@ -145,81 +140,100 @@ interface FolderData {
   sharedWithMe?: boolean
 }
 
+interface BreadcrumbItem {
+  _id: string
+  id?: string
+  name: string
+  isPublic: boolean
+  isDefault: boolean
+}
+
 type SortOption = "name" | "date" | "size" | "type" | "priority"
 type SortDirection = "asc" | "desc"
+
+const ITEMS_PER_PAGE = 30
 
 export default function InboxPage() {
   const { toast } = useToast()
   const authContext = useAuth()
   const router = useRouter()
 
+  // Core state
   const [files, setFiles] = useState<FileData[]>([])
   const [folders, setFolders] = useState<FolderData[]>([])
   const [filteredItems, setFilteredItems] = useState<(FileData | FolderData)[]>([])
-  const [selectedFile, setSelectedFile] = useState<FileData | null>(null)
-  const [selectedFolder, setSelectedFolder] = useState<FolderData | null>(null)
-  const [actionComment, setActionComment] = useState("")
-  const [requireSignature, setRequireSignature] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [currentFolder, setCurrentFolder] = useState<FolderData | null>(null)
+  const [folderFiles, setFolderFiles] = useState<FileData[]>([])
+  const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>([])
+
+  // UI state
   const [loading, setLoading] = useState(true)
+  const [isProcessing, setIsProcessing] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [sortBy, setSortBy] = useState<SortOption>("date")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
-  const [userSignature, setUserSignature] = useState<any>(null)
-  const [currentFolder, setCurrentFolder] = useState<FolderData | null>(null)
-  const [folderFiles, setFolderFiles] = useState<FileData[]>([])
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [paginatedItems, setPaginatedItems] = useState<(FileData | FolderData)[]>([])
 
   // Modal states
   const [showViewModal, setShowViewModal] = useState(false)
   const [showFolderViewModal, setShowFolderViewModal] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [showReviewModal, setShowReviewModal] = useState(false)
-  const [showSignatureDialog, setShowSignatureDialog] = useState(false)
-  const [showAddSignatureDialog, setShowAddSignatureDialog] = useState(false)
 
-  // Signature states
-  const [signatureText, setSignatureText] = useState("")
-  const [isAddingSignature, setIsAddingSignature] = useState(false)
+  // Selected items for modals
+  const [selectedFile, setSelectedFile] = useState<FileData | null>(null)
+  const [selectedFolder, setSelectedFolder] = useState<FolderData | null>(null)
 
   // Get theme colors based on user role
   const getThemeColor = () => {
     switch (authContext.user?.role) {
       case "admin":
         return {
-          primary: "orange-600",
-          primaryHover: "orange-700",
-          bg: "orange-50",
-          text: "orange-600",
-          badge: "orange-100",
-          badgeText: "orange-800",
+          primary: "bg-gradient-to-r from-orange-500 to-orange-600",
+          primaryHover: "bg-gradient-to-r from-orange-600 to-orange-700",
+          bg: "bg-orange-50",
+          text: "text-orange-600",
+          badge: "bg-orange-100",
+          badgeText: "text-orange-800",
+          border: "border-orange-200",
+          accent: "bg-orange-500",
         }
       case "director":
         return {
-          primary: "red-600",
-          primaryHover: "red-700",
-          bg: "red-50",
-          text: "red-600",
-          badge: "red-100",
-          badgeText: "red-800",
+          primary: "bg-gradient-to-r from-red-500 to-red-600",
+          primaryHover: "bg-gradient-to-r from-red-600 to-red-700",
+          bg: "bg-red-50",
+          text: "text-red-600",
+          badge: "bg-red-100",
+          badgeText: "text-red-800",
+          border: "border-red-200",
+          accent: "bg-red-500",
         }
       case "department":
         return {
-          primary: "green-600",
-          primaryHover: "green-700",
-          bg: "green-50",
-          text: "green-600",
-          badge: "green-100",
-          badgeText: "green-800",
+          primary: "bg-gradient-to-r from-green-500 to-green-600",
+          primaryHover: "bg-gradient-to-r from-green-600 to-green-700",
+          bg: "bg-green-50",
+          text: "text-green-600",
+          badge: "bg-green-100",
+          badgeText: "text-green-800",
+          border: "border-green-200",
+          accent: "bg-green-500",
         }
       default:
         return {
-          primary: "blue-600",
-          primaryHover: "blue-700",
-          bg: "blue-50",
-          text: "blue-600",
-          badge: "blue-100",
-          badgeText: "blue-800",
+          primary: "bg-gradient-to-r from-blue-500 to-blue-600",
+          primaryHover: "bg-gradient-to-r from-blue-600 to-blue-700",
+          bg: "bg-blue-50",
+          text: "text-blue-600",
+          badge: "bg-blue-100",
+          badgeText: "text-blue-800",
+          border: "border-blue-200",
+          accent: "bg-blue-500",
         }
     }
   }
@@ -269,47 +283,27 @@ export default function InboxPage() {
     }
   }
 
-  // Fetch user signature on component mount
-  useEffect(() => {
-    const fetchUserSignature = async () => {
-      try {
-        const response = await api.getUserSignature(authContext)
-        if (response.success && response.signature) {
-          const signature = response.signature
-          setUserSignature({
-            enabled: signature.enabled,
-            type: signature.type,
-            data: signature.data,
-            cloudinaryId: signature.cloudinaryId,
-            updatedAt: signature.updatedAt,
-          })
-        }
-      } catch (error) {
-        console.error("Error fetching user signature:", error)
-      }
-    }
-
-    if (authContext.isAuthenticated) {
-      fetchUserSignature()
-    }
-  }, [authContext])
-
-  // Fetch inbox files and folders
+  // Fetch shared inbox files and folders
   const fetchInboxData = async () => {
     try {
       setLoading(true)
+      console.log("Fetching shared inbox data...")
 
-      // Fetch both files and folders in parallel
+      // Fetch both shared files and folders in parallel
       const [filesResponse, foldersResponse] = await Promise.all([
         api.getInboxFiles(authContext),
         api.getInboxFolders(authContext),
       ])
 
-      // Process files
+      console.log("Files response:", filesResponse)
+      console.log("Folders response:", foldersResponse)
+
+      // Process shared files
       if (filesResponse.success && filesResponse.data) {
         const filesData = filesResponse.data.files || []
         const processedFiles = filesData.map((file: any) => ({
           ...file,
+          id: file.id || file._id, // Ensure both id and _id are available
           name: file.name || file.title || "Untitled",
           title: file.title || file.name || "Untitled",
           description: file.description || "No description",
@@ -333,19 +327,20 @@ export default function InboxPage() {
           signatures: file.signatures || [],
           sharedWithMe: true,
         }))
+        console.log("Processed shared files:", processedFiles.length)
         setFiles(processedFiles)
       } else {
-        console.warn("No files data received:", filesResponse)
+        console.warn("No shared files data received:", filesResponse)
         setFiles([])
       }
 
-      // Process folders
+      // Process shared folders
       if (foldersResponse.success && foldersResponse.data) {
         const foldersData = foldersResponse.data.folders || []
         const processedFolders = foldersData.map((folder: any) => ({
           ...folder,
+          id: folder.id || folder._id, // Ensure both id and _id are available
           sharedWithMe: true,
-          // Ensure all required properties are present
           accessLevel: folder.accessLevel || "department",
           fileCount: folder.fileCount || 0,
           isDefault: folder.isDefault || false,
@@ -357,20 +352,19 @@ export default function InboxPage() {
           },
           departments: folder.departments || [],
         }))
+        console.log("Processed shared folders:", processedFolders.length)
         setFolders(processedFolders)
-        console.log("Processed folders:", processedFolders.length)
       } else {
-        console.warn("No folders data received:", foldersResponse)
+        console.warn("No shared folders data received:", foldersResponse)
         setFolders([])
       }
     } catch (error) {
-      console.error("Error fetching inbox data:", error)
+      console.error("Error fetching shared inbox data:", error)
       toast({
         title: "Error",
-        description: "Failed to load inbox data",
+        description: "Failed to load shared inbox data",
         variant: "destructive",
       })
-      // Set empty arrays on error
       setFiles([])
       setFolders([])
     } finally {
@@ -378,13 +372,36 @@ export default function InboxPage() {
     }
   }
 
-  // Fetch folder contents
+  // Fetch folder contents when opening a shared folder
   const fetchFolderContents = async (folderId: string) => {
     try {
       setLoading(true)
+      console.log("Fetching folder contents for:", folderId)
+
       const response = await api.getFolder(folderId, authContext)
+      console.log("Folder contents response:", response)
+
       if (response.success && response.data) {
-        setFolderFiles(response.data.folder.files || [])
+        const folderData = response.data.folder
+        const folderFiles = folderData.files || []
+
+        // Process files in the folder
+        const processedFiles = folderFiles.map((file: any) => ({
+          ...file,
+          id: file.id || file._id,
+          name: file.name || file.title || "Untitled",
+          title: file.title || file.name || "Untitled",
+          description: file.description || "No description",
+          category: file.category || "Uncategorized",
+          status: file.status || "active",
+          priority: file.priority || "medium",
+          sharedWithMe: true,
+        }))
+
+        setFolderFiles(processedFiles)
+
+        // Fetch breadcrumb for navigation
+        await fetchBreadcrumb(folderId)
       }
     } catch (error) {
       console.error("Error fetching folder contents:", error)
@@ -398,22 +415,39 @@ export default function InboxPage() {
     }
   }
 
+  // Fetch breadcrumb path
+  const fetchBreadcrumb = async (folderId: string) => {
+    try {
+      const response = await api.getFolderBreadcrumb(folderId, authContext)
+      if (response.success && response.data) {
+        const breadcrumbData = response.data.breadcrumb || []
+        setBreadcrumb(
+          breadcrumbData.map((item: any) => ({
+            ...item,
+            id: item.id || item._id,
+          })),
+        )
+      }
+    } catch (error) {
+      console.error("Error fetching breadcrumb:", error)
+    }
+  }
+
   useEffect(() => {
-    fetchInboxData()
+    if (authContext.isAuthenticated) {
+      fetchInboxData()
+    }
   }, [authContext])
 
-  // Search and sort items
+  // Search, sort, and paginate items
   useEffect(() => {
-    // Use folder files if viewing a specific folder, otherwise use all items
-    const itemsToFilter = currentFolder ? folderFiles : [...files, ...folders]
+    console.log("Filtering items. Current folder:", currentFolder?.name)
+    console.log("Available files:", files.length)
+    console.log("Available folders:", folders.length)
+    console.log("Folder files:", folderFiles.length)
 
-    console.log("Items to filter:", {
-      currentFolder: currentFolder?.name,
-      filesCount: files.length,
-      foldersCount: folders.length,
-      folderFilesCount: folderFiles.length,
-      totalItems: itemsToFilter.length,
-    })
+    // Use folder files if viewing a specific folder, otherwise use all shared items
+    const itemsToFilter = currentFolder ? folderFiles : [...files, ...folders]
 
     const filtered = itemsToFilter.filter((item) => {
       const name = "name" in item ? item.name : item.title || ""
@@ -474,8 +508,54 @@ export default function InboxPage() {
 
     console.log("Filtered items:", filtered.length)
     setFilteredItems(filtered)
-  }, [files, folders, folderFiles, currentFolder, searchTerm, sortBy, sortDirection])
 
+    // Calculate pagination
+    const totalItems = filtered.length
+    const pages = Math.ceil(totalItems / ITEMS_PER_PAGE)
+    setTotalPages(pages)
+
+    // Reset to first page if current page is out of bounds
+    if (currentPage > pages && pages > 0) {
+      setCurrentPage(1)
+    }
+
+    // Get items for current page
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    const endIndex = startIndex + ITEMS_PER_PAGE
+    const paginatedResult = filtered.slice(startIndex, endIndex)
+
+    console.log("Paginated items:", paginatedResult.length)
+    setPaginatedItems(paginatedResult)
+  }, [files, folders, folderFiles, currentFolder, searchTerm, sortBy, sortDirection, currentPage])
+
+  // Navigation functions
+  const navigateToFolder = async (folder: FolderData) => {
+    console.log("Navigating to shared folder:", folder.name, folder.id || folder._id)
+    setCurrentFolder(folder)
+    setCurrentPage(1)
+    await fetchFolderContents(folder.id || folder._id)
+  }
+
+  const navigateBack = () => {
+    console.log("Going back to shared inbox")
+    setCurrentFolder(null)
+    setFolderFiles([])
+    setBreadcrumb([])
+    setCurrentPage(1)
+  }
+
+  const navigateToBreadcrumb = async (item: BreadcrumbItem, index: number) => {
+    if (index === 0) {
+      navigateBack()
+    } else {
+      const folder = folders.find((f) => (f.id || f._id) === (item.id || item._id))
+      if (folder) {
+        await navigateToFolder(folder)
+      }
+    }
+  }
+
+  // Utility functions
   const formatFileSize = (bytes: number) => {
     if (!bytes || bytes === 0) return "0 Bytes"
     const k = 1024
@@ -496,7 +576,6 @@ export default function InboxPage() {
     return date.toLocaleDateString()
   }
 
-  // Fixed priority color function with null checks
   const getPriorityColor = (priority?: string | null) => {
     if (!priority) return "bg-gray-100 text-gray-800"
     switch (priority.toLowerCase()) {
@@ -513,7 +592,6 @@ export default function InboxPage() {
     }
   }
 
-  // Fixed status color function with null checks
   const getStatusColor = (status?: string | null) => {
     if (!status) return "bg-gray-100 text-gray-800"
     switch (status.toLowerCase()) {
@@ -543,115 +621,7 @@ export default function InboxPage() {
     }
   }
 
-  // Navigation to folder
-  const navigateToFolder = async (folder: FolderData) => {
-    console.log("Navigating to folder:", folder.name, folder._id)
-    setCurrentFolder(folder)
-    await fetchFolderContents(folder._id)
-  }
-
-  // Go back to inbox root
-  const goBackToInbox = () => {
-    console.log("Going back to inbox")
-    setCurrentFolder(null)
-    setFolderFiles([])
-  }
-
-  const handleFileAction = async (action: "approve" | "reject" | "sendback") => {
-    if (!selectedFile) return
-
-    // Check if approval requires signature and user hasn't signed yet
-    if (action === "approve" && selectedFile.requiresSignature) {
-      const userHasSigned = selectedFile.signatures?.some((sig) => sig.user === authContext.user?.id)
-
-      if (!userHasSigned) {
-        if (!userSignature?.enabled) {
-          setShowSignatureDialog(true)
-          return
-        }
-        // Show add signature dialog
-        setShowAddSignatureDialog(true)
-        return
-      }
-    }
-
-    if (!actionComment.trim() && action !== "approve") {
-      toast({
-        title: "Comment required",
-        description: "Please provide a comment for this action",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsProcessing(true)
-    try {
-      const actionData = {
-        action,
-        comment: actionComment,
-        requiresSignature: action === "approve" ? requireSignature : false,
-        ...(action === "approve" && selectedFile.requiresSignature && userSignature?.enabled
-          ? { signatureData: userSignature.data }
-          : {}),
-      }
-
-      const response = await api.takeFileAction(selectedFile._id, actionData, authContext)
-
-      if (response.success) {
-        const newStatus = action === "approve" ? "approved" : action === "reject" ? "rejected" : "sent_back"
-
-        // Update local state
-        setFiles((prev) => prev.map((file) => (file._id === selectedFile._id ? { ...file, status: newStatus } : file)))
-        setSelectedFile(null)
-        setActionComment("")
-        setRequireSignature(false)
-        setShowReviewModal(false)
-
-        toast({
-          title: `File ${action}d successfully`,
-          description: `${selectedFile.title} has been ${action}d`,
-        })
-      } else {
-        throw new Error(response.error || `Failed to ${action} file`)
-      }
-    } catch (error: any) {
-      toast({
-        title: "Action failed",
-        description: error.message || `Failed to ${action} file`,
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleDeleteFile = async () => {
-    if (!selectedFile) return
-
-    try {
-      setIsProcessing(true)
-      const response = await api.deleteFile(selectedFile._id, authContext)
-
-      if (response.success) {
-        setFiles((prev) => prev.filter((file) => file._id !== selectedFile._id))
-        setShowDeleteDialog(false)
-        setSelectedFile(null)
-        toast({
-          title: "Success",
-          description: "File deleted successfully",
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete file",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
+  // Modal handlers
   const openViewModal = (item: FileData | FolderData) => {
     if ("file" in item) {
       setSelectedFile(item)
@@ -664,31 +634,34 @@ export default function InboxPage() {
     }
   }
 
-  const openDeleteDialog = (item: FileData | FolderData) => {
-    if ("file" in item) {
-      setSelectedFile(item)
-      setSelectedFolder(null)
-    } else {
-      setSelectedFolder(item)
-      setSelectedFile(null)
+  const handleDownload = async (file: FileData) => {
+    try {
+      // Create a temporary link to download the file
+      const link = document.createElement("a")
+      link.href = file.file.url
+      link.download = file.file.name
+      link.target = "_blank"
+      link.rel = "noopener noreferrer"
+
+      // Add the link to the document and click it
+      document.body.appendChild(link)
+      link.click()
+
+      // Remove the link from the document
+      document.body.removeChild(link)
+
+      toast({
+        title: "Download started",
+        description: `Downloading ${file.file.name}`,
+      })
+    } catch (error) {
+      console.error("Download error:", error)
+      toast({
+        title: "Download failed",
+        description: "Failed to download file",
+        variant: "destructive",
+      })
     }
-    setShowDeleteDialog(true)
-  }
-
-  const openReviewModal = (file: FileData) => {
-    setSelectedFile(file)
-    setShowReviewModal(true)
-  }
-
-  const openAddSignatureDialog = (file: FileData) => {
-    setSelectedFile(file)
-    setShowAddSignatureDialog(true)
-  }
-
-  const handleGoToSettings = () => {
-    setShowSignatureDialog(false)
-    setShowReviewModal(false)
-    router.push("/dashboard/settings/signature")
   }
 
   // Check if user has already signed the file
@@ -698,325 +671,237 @@ export default function InboxPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className={`h-8 w-8 animate-spin text-${themeColors.text}`} />
-        <span className="ml-2 text-gray-600">Loading inbox...</span>
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center space-y-4">
+          <div className={`w-12 h-12 rounded-full ${themeColors.accent} animate-pulse mx-auto`} />
+          <div className="space-y-2">
+            <div className="h-4 bg-gray-200 rounded w-32 mx-auto animate-pulse" />
+            <div className="h-3 bg-gray-100 rounded w-24 mx-auto animate-pulse" />
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            {currentFolder && (
-              <Button variant="ghost" size="sm" onClick={goBackToInbox} className="flex items-center gap-2">
-                <ArrowLeft className="w-4 h-4" />
-                Back to Inbox
-              </Button>
-            )}
-            <h1 className="text-3xl font-bold text-slate-800">{currentFolder ? currentFolder.name : "Shared Inbox"}</h1>
-          </div>
-          <p className="text-slate-600 mt-1">
-            {currentFolder
-              ? `Files in ${currentFolder.name} folder`
-              : "Files and folders shared with you and your department"}
-          </p>
-          {authContext.user?.role && (
-            <Badge className={`mt-2 bg-${themeColors.badge} text-${themeColors.badgeText}`}>
-              {authContext.user.role.toUpperCase()} INBOX
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-center space-x-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={currentFolder ? () => fetchFolderContents(currentFolder._id) : fetchInboxData}
-            disabled={loading}
-            className="flex items-center gap-2 bg-transparent"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          {process.env.NODE_ENV === "development" && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                console.log("Debug info:", {
-                  files: files.length,
-                  folders: folders.length,
-                  filteredItems: filteredItems.length,
-                  currentFolder: currentFolder?.name,
-                  authContext: authContext.user?.role,
-                })
-              }}
-              className="flex items-center gap-2 bg-transparent"
-            >
-              Debug
-            </Button>
-          )}
-          <Badge variant="outline" className={`text-${themeColors.text} border-${themeColors.text}`}>
-            {filteredItems.length} Items
-          </Badge>
-        </div>
-      </div>
-
-      {/* Search and Controls */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-          <Input
-            placeholder={currentFolder ? "Search folder contents..." : "Search shared items..."}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <div className="flex items-center space-x-2">
-          {/* Sort Options */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                {sortDirection === "asc" ? <SortAsc className="w-4 h-4 mr-2" /> : <SortDesc className="w-4 h-4 mr-2" />}
-                Sort by {sortBy}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => toggleSort("name")}>
-                Name {sortBy === "name" && (sortDirection === "asc" ? "↑" : "↓")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => toggleSort("date")}>
-                Date {sortBy === "date" && (sortDirection === "asc" ? "↑" : "↓")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => toggleSort("priority")}>
-                Priority {sortBy === "priority" && (sortDirection === "asc" ? "↑" : "↓")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => toggleSort("size")}>
-                Size {sortBy === "size" && (sortDirection === "asc" ? "↑" : "↓")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* View Toggle */}
-          <Button
-            variant={viewMode === "grid" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("grid")}
-            className={viewMode === "grid" ? `bg-${themeColors.primary} hover:bg-${themeColors.primaryHover}` : ""}
-          >
-            <Grid3X3 className="w-4 h-4" />
-          </Button>
-          <Button
-            variant={viewMode === "list" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("list")}
-            className={viewMode === "list" ? `bg-${themeColors.primary} hover:bg-${themeColors.primaryHover}` : ""}
-          >
-            <List className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Items Display */}
-      {filteredItems.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <Inbox className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-800 mb-2">
-              {searchTerm ? "No items found" : currentFolder ? "No files in this folder" : "No shared items"}
-            </h3>
-            <p className="text-slate-600 mb-4">
-              {searchTerm
-                ? "Try adjusting your search terms"
-                : currentFolder
-                  ? "This folder doesn't contain any files yet"
-                  : "No files or folders have been shared with you yet"}
-            </p>
-            {/* Debug info in development */}
-            {process.env.NODE_ENV === "development" && (
-              <div className="text-xs text-gray-400 mt-4">
-                <p>
-                  Debug: Files: {files.length}, Folders: {folders.length}
-                </p>
-                <p>Current folder: {currentFolder?.name || "None"}</p>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="space-y-8 p-8">
+        {/* Enhanced Header with Breadcrumb */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              {/* Enhanced Breadcrumb Navigation */}
+              <div className="flex items-center gap-2 text-sm">
+                <Inbox className="w-4 h-4 text-gray-500" />
+                <button
+                  onClick={navigateBack}
+                  className="hover:text-blue-600 transition-colors flex items-center gap-1 text-gray-600 hover:bg-blue-50 px-2 py-1 rounded-lg"
+                >
+                  Shared Inbox
+                </button>
+                {breadcrumb.map((item, index) => (
+                  <div key={item.id || item._id} className="flex items-center gap-2">
+                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                    <button
+                      onClick={() => navigateToBreadcrumb(item, index)}
+                      className={`hover:text-blue-600 transition-colors px-2 py-1 rounded-lg ${
+                        index === breadcrumb.length - 1
+                          ? `font-medium ${themeColors.text} bg-blue-50`
+                          : "text-gray-600 hover:bg-blue-50"
+                      }`}
+                    >
+                      {item.name}
+                    </button>
+                  </div>
+                ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          {/* Grid View */}
-          {viewMode === "grid" && (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-              {filteredItems.map((item) => {
-                const isFolder = !("file" in item)
-                const folder = isFolder ? (item as FolderData) : null
-                const file = !isFolder ? (item as FileData) : null
 
-                return (
-                  <Card
-                    key={item._id}
-                    className="hover:shadow-md transition-all cursor-pointer group relative"
-                    onClick={() => {
-                      if (isFolder && !currentFolder) {
-                        navigateToFolder(folder!)
-                      } else {
-                        openViewModal(item)
-                      }
-                    }}
-                  >
-                    <CardContent className="p-4 text-center">
-                      <div className="mb-3 flex justify-center">
-                        {isFolder
-                          ? getFolderIcon(folder!.accessLevel, folder!.isDefault)
-                          : getFileIcon(file!.file.type, file!.file.name)}
-                      </div>
-                      <h3 className="font-medium text-sm truncate mb-1" title={isFolder ? folder!.name : file!.name}>
-                        {isFolder ? folder!.name : file!.name}
-                      </h3>
-                      <p className="text-xs text-slate-500 mb-2">
-                        {isFolder ? `${folder!.fileCount} files` : formatFileSize(file!.file.size)}
-                      </p>
-                      <p className="text-xs text-slate-400">{formatDate(item.createdAt)}</p>
-
-                      {/* Action Menu */}
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 bg-white shadow-sm">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                            <DropdownMenuItem onClick={() => openViewModal(item)}>
-                              <Eye className="w-4 h-4 mr-2" />
-                              View Details
-                            </DropdownMenuItem>
-                            {isFolder && !currentFolder ? (
-                              <DropdownMenuItem onClick={() => navigateToFolder(folder!)}>
-                                <ArrowRight className="w-4 h-4 mr-2" />
-                                Open Folder
-                              </DropdownMenuItem>
-                            ) : (
-                              !isFolder && (
-                                <DropdownMenuItem asChild>
-                                  <a href={file!.file.url} target="_blank" rel="noopener noreferrer">
-                                    <Download className="w-4 h-4 mr-2" />
-                                    Download
-                                  </a>
-                                </DropdownMenuItem>
-                              )
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-
-                      {/* Status Indicators */}
-                      <div className="absolute top-2 left-2 flex flex-col gap-1">
-                        <Badge variant="secondary" className="text-xs px-1 py-0 bg-blue-100 text-blue-800">
-                          Shared
-                        </Badge>
-                        {!isFolder && file!.requiresSignature && (
-                          <Badge
-                            variant="secondary"
-                            className={`text-xs px-1 py-0 ${
-                              hasUserSigned(file!) ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
-                            }`}
-                          >
-                            <PenTool className="w-2 h-2 mr-1" />
-                            {hasUserSigned(file!) ? "Signed" : "Sign"}
-                          </Badge>
-                        )}
-                        {isFolder && (
-                          <Badge variant="secondary" className="text-xs px-1 py-0">
-                            {folder!.accessLevel === "public"
-                              ? "Public"
-                              : folder!.accessLevel === "private"
-                                ? "Private"
-                                : "Department"}
-                          </Badge>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                  {currentFolder ? currentFolder.name : "Shared Inbox"}
+                </h1>
+                <p className="text-gray-600">
+                  {currentFolder
+                    ? `Files in ${currentFolder.name} folder`
+                    : "Files and folders shared with you and your department"}
+                </p>
+                {authContext.user?.role && (
+                  <Badge className={`mt-2 ${themeColors.badge} ${themeColors.badgeText}`}>
+                    {authContext.user.role.toUpperCase()} INBOX
+                  </Badge>
+                )}
+              </div>
             </div>
-          )}
 
-          {/* List View */}
-          {viewMode === "list" && (
-            <Card>
-              <CardContent className="p-0">
-                <div className="divide-y">
-                  {filteredItems.map((item) => {
-                    const isFolder = !("file" in item)
-                    const folder = isFolder ? (item as FolderData) : null
-                    const file = !isFolder ? (item as FileData) : null
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={
+                  currentFolder ? () => fetchFolderContents(currentFolder.id || currentFolder._id) : fetchInboxData
+                }
+                disabled={loading}
+                className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 bg-transparent"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
 
-                    return (
-                      <div
-                        key={item._id}
-                        className="flex items-center p-4 hover:bg-slate-50 cursor-pointer group"
-                        onClick={() => {
-                          if (isFolder && !currentFolder) {
-                            navigateToFolder(folder!)
-                          } else {
-                            openViewModal(item)
-                          }
-                        }}
-                      >
-                        <div className="flex items-center flex-1 min-w-0">
-                          <div className="mr-3">
+              <Badge variant="outline" className={`${themeColors.border} ${themeColors.text} px-3 py-1`}>
+                {filteredItems.length} Items
+              </Badge>
+            </div>
+          </div>
+        </div>
+
+        {/* Enhanced Search and Controls */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between gap-6">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Input
+                placeholder={currentFolder ? "Search folder contents..." : "Search shared items..."}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-12 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500 rounded-xl transition-all duration-200"
+              />
+            </div>
+
+            <div className="flex items-center space-x-3">
+              {/* Sort Options */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-12 px-4 rounded-xl hover:bg-gray-50 bg-transparent">
+                    {sortDirection === "asc" ? (
+                      <SortAsc className="w-4 h-4 mr-2" />
+                    ) : (
+                      <SortDesc className="w-4 h-4 mr-2" />
+                    )}
+                    Sort by {sortBy}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => toggleSort("name")}>
+                    Name {sortBy === "name" && (sortDirection === "asc" ? "↑" : "↓")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => toggleSort("date")}>
+                    Date {sortBy === "date" && (sortDirection === "asc" ? "↑" : "↓")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => toggleSort("priority")}>
+                    Priority {sortBy === "priority" && (sortDirection === "asc" ? "↑" : "↓")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => toggleSort("size")}>
+                    Size {sortBy === "size" && (sortDirection === "asc" ? "↑" : "↓")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* View Toggle */}
+              <div className="flex items-center bg-gray-100 rounded-xl p-1">
+                <Button
+                  variant={viewMode === "grid" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("grid")}
+                  className={`h-10 px-4 rounded-lg transition-all duration-200 ${
+                    viewMode === "grid" ? themeColors.primary : "hover:bg-gray-200"
+                  }`}
+                >
+                  <Grid3X3 className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "list" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  className={`h-10 px-4 rounded-lg transition-all duration-200 ${
+                    viewMode === "list" ? themeColors.primary : "hover:bg-gray-200"
+                  }`}
+                >
+                  <List className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Items Display */}
+        {paginatedItems.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
+            <div className="p-16 text-center">
+              <div className={`w-20 h-20 rounded-full ${themeColors.bg} flex items-center justify-center mx-auto mb-6`}>
+                <Inbox className={`w-10 h-10 ${themeColors.text}`} />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                {searchTerm ? "No items found" : currentFolder ? "Folder is empty" : "No shared items yet"}
+              </h3>
+              <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                {searchTerm
+                  ? "Try adjusting your search terms or browse through folders"
+                  : currentFolder
+                    ? "This shared folder doesn't contain any files yet"
+                    : "No files or folders have been shared with you yet"}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Grid View */}
+            {viewMode === "grid" && (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+                {paginatedItems.map((item) => {
+                  const isFolder = !("file" in item)
+                  const folder = isFolder ? (item as FolderData) : null
+                  const file = !isFolder ? (item as FileData) : null
+
+                  return (
+                    <Card
+                      key={item.id || item._id}
+                      className="group relative cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-0 shadow-md bg-white rounded-2xl overflow-hidden"
+                      onClick={() => {
+                        if (isFolder && !currentFolder) {
+                          navigateToFolder(folder!)
+                        } else {
+                          openViewModal(item)
+                        }
+                      }}
+                    >
+                      <CardContent className="p-6 text-center">
+                        <div className="mb-4 flex justify-center">
+                          <div className="p-3 rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
                             {isFolder
                               ? getFolderIcon(folder!.accessLevel, folder!.isDefault)
                               : getFileIcon(file!.file.type, file!.file.name)}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-medium truncate">{isFolder ? folder!.name : file!.name}</h3>
-                              <Badge variant="secondary" className="text-xs px-1 py-0 bg-blue-100 text-blue-800">
-                                Shared
-                              </Badge>
-                              {!isFolder && file!.requiresSignature && (
-                                <Badge
-                                  variant="secondary"
-                                  className={`text-xs px-1 py-0 ${
-                                    hasUserSigned(file!)
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-orange-100 text-orange-800"
-                                  }`}
-                                >
-                                  <PenTool className="w-2 h-2 mr-1" />
-                                  {hasUserSigned(file!) ? "Signed" : "Sign"}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-sm text-slate-500 truncate">{item.description}</p>
-                          </div>
                         </div>
-                        <div className="hidden md:flex items-center space-x-6 text-sm text-slate-500">
-                          <span className="w-20 text-right">
-                            {isFolder ? `${folder!.fileCount} files` : formatFileSize(file!.file.size)}
-                          </span>
-                          <span className="w-24">{isFolder ? folder!.accessLevel : file!.category}</span>
-                          <span className="w-32">
-                            {item.createdBy.firstName} {item.createdBy.lastName}
-                          </span>
-                          <span className="w-24">{formatDate(item.createdAt)}</span>
+
+                        <h3
+                          className="font-semibold text-sm text-gray-900 truncate mb-2 group-hover:text-blue-600 transition-colors duration-200"
+                          title={isFolder ? folder!.name : file!.name}
+                        >
+                          {isFolder ? folder!.name : file!.name}
+                        </h3>
+
+                        <p className="text-xs text-gray-500 mb-3">
+                          {isFolder ? `${folder!.fileCount} files` : formatFileSize(file!.file.size)}
+                        </p>
+
+                        <div className="flex items-center justify-center gap-1 text-xs text-gray-400">
+                          <Clock className="w-3 h-3" />
+                          {formatDate(item.createdAt)}
                         </div>
-                        <div className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                        {/* Action Menu */}
+                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="sm">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 bg-white/90 backdrop-blur-sm shadow-lg hover:bg-white rounded-xl"
+                              >
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuContent align="end" className="w-48">
                               <DropdownMenuItem onClick={() => openViewModal(item)}>
                                 <Eye className="w-4 h-4 mr-2" />
                                 View Details
@@ -1028,13 +913,189 @@ export default function InboxPage() {
                                 </DropdownMenuItem>
                               ) : (
                                 !isFolder && (
-                                  <DropdownMenuItem asChild>
-                                    <a href={file!.file.url} target="_blank" rel="noopener noreferrer">
-                                      <Download className="w-4 h-4 mr-2" />
-                                      Download
-                                    </a>
+                                  <DropdownMenuItem onClick={() => handleDownload(file!)}>
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Download
                                   </DropdownMenuItem>
                                 )
+                              )}
+                              {!isFolder && (
+                                <DropdownMenuItem asChild>
+                                  <a href={file!.file.url} target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink className="w-4 h-4 mr-2" />
+                                    Open in New Tab
+                                  </a>
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
+                        {/* Status Indicators */}
+                        <div className="absolute top-3 left-3 flex flex-col gap-1">
+                          <Badge variant="secondary" className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-lg">
+                            <Share className="w-2 h-2 mr-1" />
+                            Shared
+                          </Badge>
+                          {!isFolder && file!.requiresSignature && (
+                            <Badge
+                              variant="secondary"
+                              className={`text-xs px-2 py-1 rounded-lg ${
+                                hasUserSigned(file!) ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
+                              }`}
+                            >
+                              <PenTool className="w-2 h-2 mr-1" />
+                              {hasUserSigned(file!) ? "Signed" : "Sign"}
+                            </Badge>
+                          )}
+                          {isFolder && (
+                            <Badge
+                              variant="secondary"
+                              className={`text-xs px-2 py-1 rounded-lg ${
+                                folder!.accessLevel === "public"
+                                  ? "bg-green-100 text-green-700"
+                                  : folder!.accessLevel === "private"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-orange-100 text-orange-700"
+                              }`}
+                            >
+                              {folder!.accessLevel === "public"
+                                ? "Public"
+                                : folder!.accessLevel === "private"
+                                  ? "Private"
+                                  : "Department"}
+                            </Badge>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* List View */}
+            {viewMode === "list" && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="divide-y divide-gray-100">
+                  {paginatedItems.map((item) => {
+                    const isFolder = !("file" in item)
+                    const folder = isFolder ? (item as FolderData) : null
+                    const file = !isFolder ? (item as FileData) : null
+
+                    return (
+                      <div
+                        key={item.id || item._id}
+                        className="flex items-center p-6 hover:bg-gray-50 cursor-pointer group transition-all duration-200"
+                        onClick={() => {
+                          if (isFolder && !currentFolder) {
+                            navigateToFolder(folder!)
+                          } else {
+                            openViewModal(item)
+                          }
+                        }}
+                      >
+                        <div className="flex items-center flex-1 min-w-0">
+                          <div className="mr-4 p-2 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
+                            {isFolder
+                              ? getFolderIcon(folder!.accessLevel, folder!.isDefault)
+                              : getFileIcon(file!.file.type, file!.file.name)}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3 mb-1">
+                              <h3 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">
+                                {isFolder ? folder!.name : file!.name}
+                              </h3>
+                              <Badge
+                                variant="secondary"
+                                className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-lg"
+                              >
+                                <Share className="w-2 h-2 mr-1" />
+                                Shared
+                              </Badge>
+                              {!isFolder && file!.requiresSignature && (
+                                <Badge
+                                  variant="secondary"
+                                  className={`text-xs px-2 py-1 rounded-lg ${
+                                    hasUserSigned(file!)
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-orange-100 text-orange-800"
+                                  }`}
+                                >
+                                  <PenTool className="w-2 h-2 mr-1" />
+                                  {hasUserSigned(file!) ? "Signed" : "Sign"}
+                                </Badge>
+                              )}
+                              {isFolder && (
+                                <Badge
+                                  variant="secondary"
+                                  className={`text-xs px-2 py-1 rounded-lg ${
+                                    folder!.accessLevel === "public"
+                                      ? "bg-green-100 text-green-700"
+                                      : folder!.accessLevel === "private"
+                                        ? "bg-red-100 text-red-700"
+                                        : "bg-orange-100 text-orange-700"
+                                  }`}
+                                >
+                                  {folder!.accessLevel === "public"
+                                    ? "Public"
+                                    : folder!.accessLevel === "private"
+                                      ? "Private"
+                                      : "Department"}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500 truncate">{item.description}</p>
+                          </div>
+                        </div>
+
+                        <div className="hidden md:flex items-center space-x-6 text-sm text-gray-500">
+                          <span className="w-24 text-right font-medium">
+                            {isFolder ? `${folder!.fileCount} files` : formatFileSize(file!.file.size)}
+                          </span>
+                          <span className="w-28 truncate">{isFolder ? folder!.accessLevel : file!.category}</span>
+                          <span className="w-36 truncate">
+                            {item.createdBy ? `${item.createdBy.firstName} ${item.createdBy.lastName}` : "System"}
+                          </span>
+                          <span className="w-28 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatDate(item.createdAt)}
+                          </span>
+                        </div>
+
+                        <div className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-xl hover:bg-gray-200">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={() => openViewModal(item)}>
+                                <Eye className="w-4 h-4 mr-2" />
+                                View Details
+                              </DropdownMenuItem>
+                              {isFolder && !currentFolder ? (
+                                <DropdownMenuItem onClick={() => navigateToFolder(folder!)}>
+                                  <ArrowRight className="w-4 h-4 mr-2" />
+                                  Open Folder
+                                </DropdownMenuItem>
+                              ) : (
+                                !isFolder && (
+                                  <DropdownMenuItem onClick={() => handleDownload(file!)}>
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Download
+                                  </DropdownMenuItem>
+                                )
+                              )}
+                              {!isFolder && (
+                                <DropdownMenuItem asChild>
+                                  <a href={file!.file.url} target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink className="w-4 h-4 mr-2" />
+                                    Open in New Tab
+                                  </a>
+                                </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -1043,204 +1104,248 @@ export default function InboxPage() {
                     )
                   })}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </>
-      )}
+              </div>
+            )}
 
-      {/* View File Modal */}
-      <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedFile && getFileIcon(selectedFile.file.type, selectedFile.file.name)}
-              {selectedFile?.name}
-            </DialogTitle>
-            <DialogDescription>File details and information</DialogDescription>
-          </DialogHeader>
-          {selectedFile && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">File Name</Label>
-                  <p className="text-sm font-medium">{selectedFile.file.name}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">File Size</Label>
-                  <p className="text-sm font-medium">{formatFileSize(selectedFile.file.size)}</p>
-                </div>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Description</Label>
-                <p className="text-sm">{selectedFile.description}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Category</Label>
-                  <p className="text-sm">{selectedFile.category}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Priority</Label>
-                  {selectedFile.priority ? (
-                    <Badge className={getPriorityColor(selectedFile.priority)}>{selectedFile.priority}</Badge>
-                  ) : (
-                    <p className="text-sm">Not specified</p>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Created By</Label>
-                  <p className="text-sm">
-                    {selectedFile.createdBy.firstName} {selectedFile.createdBy.lastName}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{selectedFile.createdBy.email}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Created Date</Label>
-                  <p className="text-sm">{new Date(selectedFile.createdAt).toLocaleString()}</p>
-                </div>
-              </div>
-              {selectedFile.folder && (
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Folder</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Folder className="w-4 h-4 text-blue-600" />
-                    <span className="text-sm">{selectedFile.folder.name}</span>
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-600">
+                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+                    {Math.min(currentPage * ITEMS_PER_PAGE, filteredItems.length)} of {filteredItems.length} items
                   </div>
-                </div>
-              )}
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Departments</Label>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {selectedFile.departments.map((dept) => (
-                    <Badge key={dept._id} variant="outline" className="text-xs">
-                      <Building2 className="w-3 h-3 mr-1" />
-                      {dept.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-3 pt-4">
-                <Button variant="outline" asChild className="flex-1 bg-transparent">
-                  <a href={selectedFile.file.url} target="_blank" rel="noopener noreferrer">
-                    <Download className="w-4 h-4 mr-2" />
-                    Download
-                  </a>
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* View Folder Modal */}
-      <Dialog open={showFolderViewModal} onOpenChange={setShowFolderViewModal}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedFolder && getFolderIcon(selectedFolder.accessLevel, selectedFolder.isDefault)}
-              {selectedFolder?.name}
-            </DialogTitle>
-            <DialogDescription>Shared folder details and information</DialogDescription>
-          </DialogHeader>
-          {selectedFolder && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Folder Name</Label>
-                  <p className="text-sm font-medium">{selectedFolder.name}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">File Count</Label>
-                  <p className="text-sm font-medium">{selectedFolder.fileCount} files</p>
-                </div>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Description</Label>
-                <p className="text-sm">{selectedFolder.description}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Access Level</Label>
                   <div className="flex items-center gap-2">
-                    {selectedFolder.accessLevel === "public" && <Globe className="w-4 h-4 text-green-600" />}
-                    {selectedFolder.accessLevel === "private" && <Lock className="w-4 h-4 text-red-600" />}
-                    {selectedFolder.accessLevel === "department" && <Users className="w-4 h-4 text-orange-600" />}
-                    <span className="text-sm capitalize">{selectedFolder.accessLevel}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="h-10 px-4 rounded-xl"
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Previous
+                    </Button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum
+                        if (totalPages <= 5) {
+                          pageNum = i + 1
+                        } else {
+                          const start = Math.max(1, currentPage - 2)
+                          const end = Math.min(totalPages, start + 4)
+                          pageNum = start + i
+                          if (pageNum > end) return null
+                        }
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={currentPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`h-10 w-10 rounded-xl ${currentPage === pageNum ? themeColors.primary : ""}`}
+                          >
+                            {pageNum}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                      className="h-10 px-4 rounded-xl"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
                   </div>
                 </div>
-                <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Created Date</Label>
-                  <p className="text-sm">{new Date(selectedFolder.createdAt).toLocaleString()}</p>
-                </div>
               </div>
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Created By</Label>
-                <p className="text-sm">
-                  {selectedFolder.createdBy.firstName} {selectedFolder.createdBy.lastName}
-                </p>
-                <p className="text-xs text-muted-foreground">{selectedFolder.createdBy.email}</p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground">Departments</Label>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {selectedFolder.departments.map((dept) => (
-                    <Badge key={dept._id} variant="outline" className="text-xs">
-                      <Building2 className="w-3 h-3 mr-1" />
-                      {dept.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-3 pt-4">
-                <Button
-                  variant="outline"
-                  className="flex-1 bg-transparent"
-                  onClick={() => {
-                    setShowFolderViewModal(false)
-                    navigateToFolder(selectedFolder)
-                  }}
-                >
-                  <ArrowRight className="w-4 h-4 mr-2" />
-                  Open Folder
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            )}
+          </>
+        )}
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedFile ? "File" : "Folder"}</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete "{selectedFile ? selectedFile.name : selectedFolder?.name}"? This action
-              cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isProcessing}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteFile}
-              disabled={isProcessing}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                `Delete ${selectedFile ? "File" : "Folder"}`
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        {/* View File Modal */}
+        <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
+          <DialogContent className="max-w-2xl rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
+                {selectedFile && (
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100">
+                    {getFileIcon(selectedFile.file.type, selectedFile.file.name)}
+                  </div>
+                )}
+                {selectedFile?.title}
+              </DialogTitle>
+              <DialogDescription>Shared file details and information</DialogDescription>
+            </DialogHeader>
+            {selectedFile && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-sm font-medium text-gray-600">File Name</Label>
+                    <p className="text-sm font-semibold text-gray-900 mt-1">{selectedFile.file.name}</p>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-sm font-medium text-gray-600">File Size</Label>
+                    <p className="text-sm font-semibold text-gray-900 mt-1">{formatFileSize(selectedFile.file.size)}</p>
+                  </div>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <Label className="text-sm font-medium text-gray-600">Description</Label>
+                  <p className="text-sm text-gray-900 mt-1">{selectedFile.description}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-sm font-medium text-gray-600">Category</Label>
+                    <p className="text-sm text-gray-900 mt-1">{selectedFile.category}</p>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-sm font-medium text-gray-600">Priority</Label>
+                    {selectedFile.priority ? (
+                      <Badge className={getPriorityColor(selectedFile.priority)}>{selectedFile.priority}</Badge>
+                    ) : (
+                      <p className="text-sm text-gray-900 mt-1">Not specified</p>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-sm font-medium text-gray-600">Shared By</Label>
+                    <p className="text-sm text-gray-900 mt-1">
+                      {selectedFile.createdBy.firstName} {selectedFile.createdBy.lastName}
+                    </p>
+                    <p className="text-xs text-gray-500">{selectedFile.createdBy.email}</p>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-sm font-medium text-gray-600">Shared Date</Label>
+                    <p className="text-sm text-gray-900 mt-1">{new Date(selectedFile.createdAt).toLocaleString()}</p>
+                  </div>
+                </div>
+                {selectedFile.folder && (
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-sm font-medium text-gray-600">Folder</Label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Folder className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm text-gray-900">{selectedFile.folder.name}</span>
+                    </div>
+                  </div>
+                )}
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <Label className="text-sm font-medium text-gray-600">Departments</Label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {selectedFile.departments.map((dept) => (
+                      <Badge key={dept._id} variant="outline" className="text-xs rounded-lg">
+                        <Building2 className="w-3 h-3 mr-1" />
+                        {dept.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDownload(selectedFile)}
+                    className="flex-1 h-12 rounded-xl bg-transparent"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download File
+                  </Button>
+                  <Button variant="outline" asChild className="flex-1 h-12 rounded-xl bg-transparent">
+                    <a href={selectedFile.file.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Open in New Tab
+                    </a>
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* View Folder Modal */}
+        <Dialog open={showFolderViewModal} onOpenChange={setShowFolderViewModal}>
+          <DialogContent className="max-w-2xl rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
+                {selectedFolder && (
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100">
+                    {getFolderIcon(selectedFolder.accessLevel, selectedFolder.isDefault)}
+                  </div>
+                )}
+                {selectedFolder?.name}
+              </DialogTitle>
+              <DialogDescription>Shared folder details and information</DialogDescription>
+            </DialogHeader>
+            {selectedFolder && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-sm font-medium text-gray-600">Folder Name</Label>
+                    <p className="text-sm font-semibold text-gray-900 mt-1">{selectedFolder.name}</p>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-sm font-medium text-gray-600">File Count</Label>
+                    <p className="text-sm font-semibold text-gray-900 mt-1">{selectedFolder.fileCount} files</p>
+                  </div>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <Label className="text-sm font-medium text-gray-600">Description</Label>
+                  <p className="text-sm text-gray-900 mt-1">{selectedFolder.description}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-sm font-medium text-gray-600">Access Level</Label>
+                    <div className="flex items-center gap-2 mt-1">
+                      {selectedFolder.accessLevel === "public" && <Globe className="w-4 h-4 text-green-600" />}
+                      {selectedFolder.accessLevel === "private" && <Lock className="w-4 h-4 text-red-600" />}
+                      {selectedFolder.accessLevel === "department" && <Users className="w-4 h-4 text-orange-600" />}
+                      <span className="text-sm text-gray-900 capitalize">{selectedFolder.accessLevel}</span>
+                    </div>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <Label className="text-sm font-medium text-gray-600">Shared Date</Label>
+                    <p className="text-sm text-gray-900 mt-1">{new Date(selectedFolder.createdAt).toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <Label className="text-sm font-medium text-gray-600">Shared By</Label>
+                  <p className="text-sm text-gray-900 mt-1">
+                    {selectedFolder.createdBy.firstName} {selectedFolder.createdBy.lastName}
+                  </p>
+                  <p className="text-xs text-gray-500">{selectedFolder.createdBy.email}</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <Label className="text-sm font-medium text-gray-600">Departments</Label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {selectedFolder.departments.map((dept) => (
+                      <Badge key={dept._id} variant="outline" className="text-xs rounded-lg">
+                        <Building2 className="w-3 h-3 mr-1" />
+                        {dept.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-12 rounded-xl bg-transparent"
+                    onClick={() => {
+                      setShowFolderViewModal(false)
+                      navigateToFolder(selectedFolder)
+                    }}
+                  >
+                    <ArrowRight className="w-4 h-4 mr-2" />
+                    Open Folder
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   )
 }

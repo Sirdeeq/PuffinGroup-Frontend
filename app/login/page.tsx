@@ -170,12 +170,10 @@ export default function LoginPage() {
 
   const renderRoleSelection = () => (
     <div className="w-full max-w-5xl px-4">
-      <div className="text-center mb-12">
-        <div className="flex justify-center mb-6">
-          <Logo size="lg" showText={true} />
+      <div className="text-center mb-4">
+        <div className="flex justify-center mb-4">
+          <Logo size="xxxxxxxxxl" showText={false} />
         </div>
-        <h1 className="text-4xl font-bold text-gray-800 mb-3">Welcome to the Document Management System</h1>
-        <p className="text-gray-600 text-lg">Please select your role to continue</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">

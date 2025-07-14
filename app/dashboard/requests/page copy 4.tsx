@@ -1,7 +1,6 @@
 "use client"
-import { useState, useEffect } from "react"
-import type React from "react"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +11,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
+
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -49,19 +50,19 @@ import { useAuth } from "@/contexts/AuthContext"
 
 // Add these interfaces near your other interfaces
 interface Department {
-  _id: string
-  name: string
-  code: string
-  isActive: boolean
+  _id: string;
+  name: string;
+  code: string;
+  isActive: boolean;
 }
 
 interface Director {
-  _id: string
-  firstName: string
-  lastName: string
-  email: string
-  position: string
-  department: string
+  _id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  position: string;
+  department: string;
 }
 
 interface RequestItem {
@@ -423,6 +424,7 @@ const RequestPDF = ({ request }: { request: RequestItem }) => {
       <Page size="A4" style={pdfStyles.page}>
         {/* Watermark */}
         <Text style={pdfStyles.watermark}>PUFFIN GROUP</Text>
+
         {/* Header with Logo */}
         <View style={pdfStyles.header}>
           <Image style={pdfStyles.logo} src="/logo.png" />
@@ -433,12 +435,14 @@ const RequestPDF = ({ request }: { request: RequestItem }) => {
             <Text style={pdfStyles.companySubtitle}>Document ID: {request._id.slice(-8).toUpperCase()}</Text>
           </View>
         </View>
+
         {/* Title with Status */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 30 }}>
           <Text style={pdfStyles.title}>Request Details Report</Text>
           <Text style={[pdfStyles.badge, getStatusStyle(request.status)]}>{request.status.toUpperCase()}</Text>
           {request.isUrgent && <Text style={pdfStyles.urgentBadge}>🚨 URGENT</Text>}
         </View>
+
         {/* Basic Information */}
         <View style={pdfStyles.section}>
           <Text style={pdfStyles.sectionTitle}>📋 Request Information</Text>
@@ -477,11 +481,13 @@ const RequestPDF = ({ request }: { request: RequestItem }) => {
             </View>
           )}
         </View>
+
         {/* Description */}
         <View style={pdfStyles.section}>
           <Text style={pdfStyles.sectionTitle}>📝 Description</Text>
           <Text style={pdfStyles.description}>{request.description}</Text>
         </View>
+
         {/* Sent Back Comment */}
         {request.status.toLowerCase() === "sent back" && getSentBackComment() && (
           <View style={pdfStyles.commentSection}>
@@ -489,6 +495,7 @@ const RequestPDF = ({ request }: { request: RequestItem }) => {
             <Text style={pdfStyles.description}>{getSentBackComment()}</Text>
           </View>
         )}
+
         {/* Created By */}
         <View style={pdfStyles.section}>
           <Text style={pdfStyles.sectionTitle}>👤 Created By</Text>
@@ -503,6 +510,7 @@ const RequestPDF = ({ request }: { request: RequestItem }) => {
             <Text style={pdfStyles.value}>{request.createdBy.email}</Text>
           </View>
         </View>
+
         {/* Target Departments */}
         <View style={pdfStyles.section}>
           <Text style={pdfStyles.sectionTitle}>🏢 Target Departments</Text>
@@ -515,6 +523,7 @@ const RequestPDF = ({ request }: { request: RequestItem }) => {
             </View>
           ))}
         </View>
+
         {/* Assigned Directors */}
         {request.assignedDirectors.length > 0 && (
           <View style={pdfStyles.section}>
@@ -545,6 +554,7 @@ const RequestPDF = ({ request }: { request: RequestItem }) => {
             ))}
           </View>
         )}
+
         {/* Department Approvals */}
         {request.departmentApprovals && request.departmentApprovals.length > 0 && (
           <View style={pdfStyles.section}>
@@ -571,6 +581,7 @@ const RequestPDF = ({ request }: { request: RequestItem }) => {
             </View>
           </View>
         )}
+
         {/* Attachments */}
         {request.attachments.length > 0 && (
           <View style={pdfStyles.section}>
@@ -585,6 +596,7 @@ const RequestPDF = ({ request }: { request: RequestItem }) => {
             ))}
           </View>
         )}
+
         {/* Digital Signature Section */}
         {request.requiresSignature && (
           <View style={pdfStyles.signatureSection}>
@@ -611,6 +623,7 @@ const RequestPDF = ({ request }: { request: RequestItem }) => {
             )}
           </View>
         )}
+
         {/* Comments */}
         {request.comments.length > 0 && (
           <View style={pdfStyles.section}>
@@ -647,6 +660,7 @@ const RequestPDF = ({ request }: { request: RequestItem }) => {
             ))}
           </View>
         )}
+
         {/* Footer */}
         <Text style={pdfStyles.footer}>
           This document was generated automatically by Puffin Group Request Management System
@@ -722,6 +736,7 @@ const StatusTag = ({ status }: { status: string }) => {
   }
 
   const config = getStatusConfig(status)
+
   return (
     <Badge
       className={`${config.color} ${config.textColor} border-0 text-sm px-4 py-2 font-bold shadow-lg hover:shadow-xl transition-all duration-300`}
@@ -775,6 +790,7 @@ const PriorityTag = ({ priority }: { priority: string }) => {
   }
 
   const config = getPriorityConfig(priority)
+
   return (
     <Badge
       className={`${config.color} ${config.textColor} ${config.pulse} border-0 text-sm px-4 py-2 font-bold shadow-lg hover:shadow-xl transition-all duration-300`}
@@ -794,182 +810,144 @@ export default function RequestsPage() {
   const [viewMode, setViewMode] = useState<"card" | "list">("card")
   const [selectedRequest, setSelectedRequest] = useState<RequestItem | null>(null)
   const authContext = useAuth()
-  const [departments, setDepartments] = useState<Department[]>([])
-  const [loadingDepartments, setLoadingDepartments] = useState(false)
-  const [directors, setDirectors] = useState<Director[]>([])
-  const [loadingDirectors, setLoadingDirectors] = useState(false)
-  const [editRequest, setEditRequest] = useState<RequestItem | null>(null)
-  const [isUpdating, setIsUpdating] = useState(false)
-  const [newAttachments, setNewAttachments] = useState<File[]>([])
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(true);
+  const [directors, setDirectors] = useState<Director[]>([]);
+  const [loadingDirectors, setLoadingDirectors] = useState(false);
 
-  // Fetch departments when edit dialog opens
-  useEffect(() => {
-    const fetchDepartments = async () => {
-      if (!editRequest) return
+  const [editRequest, setEditRequest] = useState<RequestItem | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [newAttachments, setNewAttachments] = useState<File[]>([]);
 
-      try {
-        setLoadingDepartments(true)
-        const response = await api.getDepartments({ includeInactive: false }, authContext)
-        if (response.success && response.data) {
-          setDepartments(response.data.departments || [])
-        } else {
-          throw new Error(response.error || "Failed to fetch departments")
-        }
-      } catch (error: any) {
-        console.error("Error fetching departments:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to load departments",
-          variant: "destructive",
-        })
-      } finally {
-        setLoadingDepartments(false)
-      }
-    }
 
-    if (editRequest) {
-      fetchDepartments()
-    } else {
-      setDepartments([])
-    }
-  }, [editRequest, authContext, toast])
-
-  // Fetch directors when departments change in edit mode
-  useEffect(() => {
-    const fetchDirectors = async () => {
-      if (!editRequest || !editRequest.targetDepartments) {
-        setDirectors([])
-        return
-      }
-
-      try {
-        setLoadingDirectors(true)
-        const allDirectors: Director[] = []
-
-        for (const deptId of editRequest.targetDepartments) {
-          try {
-            const response = await api.getDirectorsByDepartment(deptId, authContext)
-            if (response.success && response.data) {
-              const { currentDirector, previousDirectors } = response.data
-              if (currentDirector) allDirectors.push(currentDirector)
-              allDirectors.push(...previousDirectors)
-            }
-          } catch (error) {
-            console.error(`Error fetching directors for department ${deptId}:`, error)
+  // Add this useEffect to fetch directors when departments change
+useEffect(() => {
+  const fetchDirectors = async () => {
+    if (!editRequest || editRequest.targetDepartments.length === 0) return;
+    
+    try {
+      setLoadingDirectors(true);
+      const allDirectors: Director[] = [];
+      
+      for (const deptId of editRequest.targetDepartments) {
+        try {
+          const response = await api.getDirectorsByDepartment(deptId, authContext);
+          if (response.success && response.data) {
+            const { currentDirector, previousDirectors } = response.data;
+            if (currentDirector) allDirectors.push(currentDirector);
+            allDirectors.push(...previousDirectors);
           }
+        } catch (error) {
+          console.error(`Error fetching directors for department ${deptId}:`, error);
         }
-
-        const uniqueDirectors = allDirectors.filter(
-          (director, index, self) => index === self.findIndex((d) => d._id === director._id),
-        )
-        setDirectors(uniqueDirectors)
-      } catch (error: any) {
-        console.error("Error fetching directors:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to load directors",
-          variant: "destructive",
-        })
-      } finally {
-        setLoadingDirectors(false)
       }
+      
+      const uniqueDirectors = allDirectors.filter(
+        (director, index, self) => index === self.findIndex((d) => d._id === director._id)
+      );
+      setDirectors(uniqueDirectors);
+    } catch (error: any) {
+      console.error("Error fetching directors:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load directors",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingDirectors(false);
     }
+  };
 
-    if (editRequest && editRequest.targetDepartments.length > 0) {
-      fetchDirectors()
-    } else {
-      setDirectors([])
-    }
-  }, [editRequest?.targetDepartments, authContext, toast])
+  if (editRequest && editRequest.targetDepartments.length > 0) {
+    fetchDirectors();
+  } else {
+    setDirectors([]);
+  }
+}, [editRequest?.targetDepartments, authContext, toast]);
 
   // Function to handle file uploads for editing
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
-      setNewAttachments(Array.from(event.target.files))
+      setNewAttachments(Array.from(event.target.files));
     }
-  }
+  };
 
   // Function to update the request
   const handleUpdateRequest = async () => {
-    if (!editRequest) return
-    setIsUpdating(true)
+    if (!editRequest) return;
+
+    setIsUpdating(true);
     try {
-      const formData = new FormData()
-      formData.append("title", editRequest.title)
-      formData.append("description", editRequest.description)
-      formData.append("category", editRequest.category)
-      formData.append("priority", editRequest.priority)
-      formData.append("requiresSignature", editRequest.requiresSignature?.toString() || "false")
+      const formData = new FormData();
+      formData.append("title", editRequest.title);
+      formData.append("description", editRequest.description);
+      formData.append("category", editRequest.category);
+      formData.append("priority", editRequest.priority);
+      formData.append("requiresSignature", editRequest.requiresSignature.toString());
 
-      // Add target departments
-      editRequest.targetDepartments.forEach((deptId) => {
-        formData.append("targetDepartments", deptId)
-      })
+      editRequest.targetDepartments.forEach(deptId => {
+        formData.append("targetDepartments", deptId);
+      });
 
-      // Add assigned director if selected
       if (editRequest.assignedDirectors) {
-        formData.append("assignedDirectors", editRequest.assignedDirectors)
+        formData.append("assignedDirectors", editRequest.assignedDirectors);
       }
 
-      // Add due date if provided
       if (editRequest.dueDate) {
-        formData.append("dueDate", editRequest.dueDate)
+        formData.append("dueDate", editRequest.dueDate);
       }
 
       // Add new attachments
-      newAttachments.forEach((file) => {
-        formData.append("attachments", file)
-      })
+      newAttachments.forEach(file => {
+        formData.append("attachments", file);
+      });
 
       // Add existing attachments that haven't been removed
-      editRequest.attachments.forEach((attachment) => {
-        formData.append("existingAttachments", attachment.name)
-      })
+      editRequest.attachments.forEach(attachment => {
+        formData.append("existingAttachments", attachment.name);
+      });
 
-      const response = await api.updateRequest(editRequest._id, formData, authContext)
+      const response = await api.updateRequest(editRequest._id, formData, authContext);
+
       if (response.success) {
         toast({
           title: "Request updated successfully",
           description: `Your request "${editRequest.title}" has been updated`,
-        })
+        });
         // Refresh the requests list
-        const refreshResponse = await api.getRequests(authContext)
+        const refreshResponse = await api.getRequests(authContext);
         if (refreshResponse.success && refreshResponse.data) {
-          setRequests(refreshResponse.data.requests || [])
+          setRequests(refreshResponse.data.requests || []);
         }
-        setEditRequest(null)
-        setNewAttachments([])
+        setEditRequest(null);
       } else {
-        throw new Error(response.error || "Failed to update request")
+        throw new Error(response.error || "Failed to update request");
       }
     } catch (error: any) {
       toast({
         title: "Update failed",
         description: error.message || "Failed to update request",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsUpdating(false)
+      setIsUpdating(false);
     }
-  }
+  };
 
-  // Handle edit button click
+  // Add this to your edit button click handler
   const handleEditClick = (request: RequestItem) => {
-    // Properly extract director ID from the request structure
-    const assignedDirectorId =
-      request.assignedDirectors.length > 0 && request.assignedDirectors[0].director
-        ? request.assignedDirectors[0].director._id
-        : ""
-
     setEditRequest({
       ...request,
-      // Convert department objects to just IDs for the form
-      targetDepartments: request.targetDepartments.map((dept) => dept._id),
-      // Extract director ID properly
-      assignedDirectors: assignedDirectorId,
-    })
-    setNewAttachments([])
-  }
+      // Convert department objects to just IDs
+      targetDepartments: request.targetDepartments.map(dept => dept._id),
+      // Convert director assignments to just IDs
+      assignedDirectors: request.assignedDirectors.length > 0
+        ? request.assignedDirectors[0]._id
+        : ""
+    });
+    setNewAttachments([]);
+  };
+
 
   const priorities = [
     { value: "low", label: "Low", color: "text-blue-600", bgColor: "bg-blue-100", icon: "🔵" },
@@ -979,30 +957,15 @@ export default function RequestsPage() {
   ]
 
   const categories = [
-    {
-      value: "it_support",
-      label: "IT Support",
-      description: "IT-related support and maintenance requests",
-      icon: "💻",
-    },
-    {
-      value: "hr_request",
-      label: "HR Request",
-      description: "Human resources and personnel-related requests",
-      icon: "👥",
-    },
+    { value: "it_support", label: "IT Support", description: "IT-related support and maintenance requests", icon: "💻" },
+    { value: "hr_request", label: "HR Request", description: "Human resources and personnel-related requests", icon: "👥" },
     { value: "finance", label: "Finance", description: "Financial and accounting-related requests", icon: "💰" },
     { value: "procurement", label: "Procurement", description: "Purchase and procurement requests", icon: "🛒" },
-    {
-      value: "facilities",
-      label: "Facilities",
-      description: "Facilities management and maintenance requests",
-      icon: "🏢",
-    },
+    { value: "facilities", label: "Facilities", description: "Facilities management and maintenance requests", icon: "🏢" },
     { value: "legal", label: "Legal", description: "Legal and compliance-related requests", icon: "⚖️" },
     { value: "marketing", label: "Marketing", description: "Marketing and communications requests", icon: "📢" },
     { value: "operations", label: "Operations", description: "Operational and process-related requests", icon: "⚙️" },
-    { value: "other", label: "Other", description: "General requests not covered by other categories", icon: "📝" },
+    { value: "other", label: "Other", description: "General requests not covered by other categories", icon: "📝" }
   ]
 
   // Fetch requests
@@ -1054,6 +1017,7 @@ export default function RequestsPage() {
       request.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       request.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       request.targetDepartments.some((dept) => dept.name.toLowerCase().includes(searchTerm.toLowerCase()))
+
     const matchesStatus = filterStatus === "all" || request.status.toLowerCase() === filterStatus.toLowerCase()
     return matchesSearch && matchesStatus
   })
@@ -1121,7 +1085,10 @@ export default function RequestsPage() {
                     )}
                   </PDFDownloadLink>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleEditClick(request)} className="text-base py-3">
+                <DropdownMenuItem
+                  onClick={() => handleEditClick(request)}
+                  className="text-base py-3"
+                >
                   <Edit className="w-5 h-5 mr-3" />
                   Edit Request
                 </DropdownMenuItem>
@@ -1132,6 +1099,7 @@ export default function RequestsPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+
           <div className="space-y-4">
             <div className="flex items-center space-x-3 text-slate-600">
               <Calendar className="w-5 h-5 flex-shrink-0" />
@@ -1151,6 +1119,7 @@ export default function RequestsPage() {
               </span>
             </div>
           </div>
+
           <div className="flex flex-wrap gap-3">
             <StatusTag status={request.status} />
             <PriorityTag priority={request.priority} />
@@ -1169,6 +1138,7 @@ export default function RequestsPage() {
               </Badge>
             )}
           </div>
+
           {/* Sent Back Comment */}
           {request.status.toLowerCase() === "sent back" && getSentBackComment(request) && (
             <div className="p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border-l-4 border-orange-400">
@@ -1179,6 +1149,7 @@ export default function RequestsPage() {
               <p className="text-sm text-orange-700 italic">{getSentBackComment(request)}</p>
             </div>
           )}
+
           {/* Signature Display */}
           {request.signatureProvided && request.signatureData && (
             <div className="p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border-l-4 border-emerald-400">
@@ -1198,12 +1169,14 @@ export default function RequestsPage() {
               )}
             </div>
           )}
+
           {request.attachments && request.attachments.length > 0 && (
             <div className="flex items-center space-x-3 text-slate-600 bg-slate-50 p-3 rounded-xl">
               <Paperclip className="w-5 h-5 flex-shrink-0" />
               <span className="text-base font-medium">{request.attachments.length} attachment(s)</span>
             </div>
           )}
+
           {request.dueDate && (
             <div className="flex items-center space-x-3 text-slate-600 bg-amber-50 p-3 rounded-lg border border-amber-200">
               <Clock className="w-5 h-5 flex-shrink-0" />
@@ -1297,7 +1270,7 @@ export default function RequestsPage() {
                         <Eye className="w-5 h-5 mr-3" />
                         View Details
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleEditClick(request)} className="text-base py-3">
+                      <DropdownMenuItem className="text-base py-3">
                         <Edit className="w-5 h-5 mr-3" />
                         Edit Request
                       </DropdownMenuItem>
@@ -1659,7 +1632,6 @@ export default function RequestsPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Edit Request Dialog */}
         <Dialog open={!!editRequest} onOpenChange={() => setEditRequest(null)}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -1669,6 +1641,7 @@ export default function RequestsPage() {
               </DialogTitle>
               <DialogDescription>Update the details of this request</DialogDescription>
             </DialogHeader>
+
             {editRequest && (
               <div className="space-y-6">
                 {/* Basic Information */}
@@ -1706,7 +1679,9 @@ export default function RequestsPage() {
                                   <span>{category.icon}</span>
                                   <div>
                                     <div className="font-medium">{category.label}</div>
-                                    <div className="text-xs text-slate-600 hidden sm:block">{category.description}</div>
+                                    <div className="text-xs text-slate-600 hidden sm:block">
+                                      {category.description}
+                                    </div>
                                   </div>
                                 </div>
                               </SelectItem>
@@ -1715,6 +1690,7 @@ export default function RequestsPage() {
                         </Select>
                       </div>
                     </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="edit-description">Description *</Label>
                       <Textarea
@@ -1725,6 +1701,7 @@ export default function RequestsPage() {
                         rows={4}
                       />
                     </div>
+
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <Label>Priority *</Label>
@@ -1751,11 +1728,12 @@ export default function RequestsPage() {
                         <Label>Due Date (Optional)</Label>
                         <Input
                           type="date"
-                          value={editRequest.dueDate ? editRequest.dueDate.split("T")[0] : ""}
+                          value={editRequest.dueDate ? editRequest.dueDate.split('T')[0] : ''}
                           onChange={(e) => setEditRequest({ ...editRequest, dueDate: e.target.value })}
                         />
                       </div>
                     </div>
+
                     <div className="flex items-center space-x-3 p-3 rounded-lg bg-slate-50">
                       <Checkbox
                         id="edit-requires-signature"
@@ -1777,7 +1755,9 @@ export default function RequestsPage() {
                         <Building2 className="w-5 h-5 mr-2" />
                         Target Departments *
                       </div>
-                      <Badge>{editRequest.targetDepartments.length} selected</Badge>
+                      <Badge>
+                        {editRequest.targetDepartments.length} selected
+                      </Badge>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
@@ -1787,94 +1767,81 @@ export default function RequestsPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          const allIds = departments.map((d) => d._id)
+                          const allIds = departments.map(d => d._id);
                           setEditRequest({
                             ...editRequest,
-                            targetDepartments: editRequest.targetDepartments.length === allIds.length ? [] : allIds,
-                            assignedDirectors: "",
-                          })
+                            targetDepartments: editRequest.targetDepartments.length === allIds.length ? [] : allIds
+                          });
                         }}
-                        disabled={loadingDepartments}
                       >
                         <Users className="w-4 h-4 mr-1" />
                         {editRequest.targetDepartments.length === departments.length ? "Deselect All" : "Select All"}
                       </Button>
 
-                      {loadingDepartments ? (
-                        <div className="flex items-center justify-center p-8 border rounded-lg">
-                          <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                          <span>Loading departments...</span>
-                        </div>
-                      ) : (
-                        <div className="border-2 border-dashed rounded-lg p-4">
-                          <ScrollArea className="h-48">
-                            <div className="space-y-2">
-                              {departments.map((dept) => (
-                                <div
-                                  key={dept._id}
-                                  className="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg"
-                                >
-                                  <Checkbox
-                                    id={`edit-dept-${dept._id}`}
-                                    checked={editRequest.targetDepartments.includes(dept._id)}
-                                    onCheckedChange={() => {
-                                      const newDepts = editRequest.targetDepartments.includes(dept._id)
-                                        ? editRequest.targetDepartments.filter((id) => id !== dept._id)
-                                        : [...editRequest.targetDepartments, dept._id]
-                                      setEditRequest({
-                                        ...editRequest,
-                                        targetDepartments: newDepts,
-                                        assignedDirectors: "",
-                                      })
-                                    }}
-                                  />
-                                  <div className="flex-1 min-w-0">
-                                    <Label htmlFor={`edit-dept-${dept._id}`} className="flex items-center space-x-2">
-                                      <Building2 className="w-4 h-4" />
-                                      <span className="truncate">{dept.name}</span>
-                                      <Badge variant="outline" className="text-xs">
-                                        {dept.code}
-                                      </Badge>
-                                    </Label>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                          {editRequest.targetDepartments.length > 0 && (
-                            <div className="mt-4 pt-4 border-t">
-                              <Label>Selected Departments:</Label>
-                              <div className="flex flex-wrap gap-2 mt-2">
-                                {editRequest.targetDepartments.map((deptId) => {
-                                  const dept = departments.find((d) => d._id === deptId)
-                                  return dept ? (
-                                    <Badge key={deptId} variant="secondary" className="text-xs">
-                                      {dept.name} ({dept.code})
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-auto p-0 ml-1"
-                                        onClick={() => {
-                                          setEditRequest({
-                                            ...editRequest,
-                                            targetDepartments: editRequest.targetDepartments.filter(
-                                              (id) => id !== deptId,
-                                            ),
-                                            assignedDirectors: "",
-                                          })
-                                        }}
-                                      >
-                                        <X className="w-3 h-3" />
-                                      </Button>
+                      <div className="border-2 border-dashed rounded-lg p-4">
+                        <ScrollArea className="h-48">
+                          <div className="space-y-2">
+                            {departments.map((dept) => (
+                              <div key={dept._id} className="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg">
+                                <Checkbox
+                                  id={`edit-dept-${dept._id}`}
+                                  checked={editRequest.targetDepartments.includes(dept._id)}
+                                  onCheckedChange={() => {
+                                    const newDepts = editRequest.targetDepartments.includes(dept._id)
+                                      ? editRequest.targetDepartments.filter(id => id !== dept._id)
+                                      : [...editRequest.targetDepartments, dept._id];
+                                    setEditRequest({
+                                      ...editRequest,
+                                      targetDepartments: newDepts,
+                                      assignedDirectors: ""
+                                    });
+                                  }}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <Label htmlFor={`edit-dept-${dept._id}`} className="flex items-center space-x-2">
+                                    <Building2 className="w-4 h-4" />
+                                    <span className="truncate">{dept.name}</span>
+                                    <Badge variant="outline" className="text-xs">
+                                      {dept.code}
                                     </Badge>
-                                  ) : null
-                                })}
+                                  </Label>
+                                </div>
                               </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+
+                        {editRequest.targetDepartments.length > 0 && (
+                          <div className="mt-4 pt-4 border-t">
+                            <Label>Selected Departments:</Label>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {editRequest.targetDepartments.map((deptId) => {
+                                const dept = departments.find(d => d._id === deptId);
+                                return dept ? (
+                                  <Badge key={deptId} variant="secondary" className="text-xs">
+                                    {dept.name} ({dept.code})
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-auto p-0 ml-1"
+                                      onClick={() => {
+                                        setEditRequest({
+                                          ...editRequest,
+                                          targetDepartments: editRequest.targetDepartments.filter(id => id !== deptId),
+                                          assignedDirectors: ""
+                                        });
+                                      }}
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </Button>
+                                  </Badge>
+                                ) : null;
+                              })}
                             </div>
-                          )}
-                        </div>
-                      )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -1892,22 +1859,20 @@ export default function RequestsPage() {
                       <Select
                         value={editRequest.assignedDirectors}
                         onValueChange={(value) => setEditRequest({ ...editRequest, assignedDirectors: value })}
-                        disabled={editRequest.targetDepartments.length === 0 || loadingDirectors}
+                        disabled={editRequest.targetDepartments.length === 0}
                       >
                         <SelectTrigger>
                           <SelectValue
                             placeholder={
-                              loadingDirectors
-                                ? "Loading directors..."
-                                : editRequest.targetDepartments.length === 0
-                                  ? "Select departments first"
-                                  : "Select director"
+                              editRequest.targetDepartments.length === 0
+                                ? "Select departments first"
+                                : "Select director"
                             }
                           />
                         </SelectTrigger>
                         <SelectContent>
                           {directors
-                            .filter((d) => editRequest.targetDepartments.includes(d.department))
+                            .filter(d => editRequest.targetDepartments.includes(d.department))
                             .map((director) => (
                               <SelectItem key={director._id} value={director._id}>
                                 <div className="flex items-center space-x-2">
@@ -1916,7 +1881,9 @@ export default function RequestsPage() {
                                     <div>
                                       {director.firstName} {director.lastName}
                                     </div>
-                                    <div className="text-xs text-muted-foreground">({director.position})</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      ({director.position})
+                                    </div>
                                   </div>
                                 </div>
                               </SelectItem>
@@ -1925,11 +1892,6 @@ export default function RequestsPage() {
                       </Select>
                       {editRequest.targetDepartments.length === 0 && (
                         <p className="text-sm text-slate-500">Select departments first</p>
-                      )}
-                      {directors.length > 0 && (
-                        <p className="text-sm text-slate-500">
-                          {directors.length} director(s) available from selected departments
-                        </p>
                       )}
                     </div>
                   </CardContent>
@@ -1955,20 +1917,23 @@ export default function RequestsPage() {
                         id="edit-file-upload"
                         accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
                       />
-                      <Button variant="outline" onClick={() => document.getElementById("edit-file-upload")?.click()}>
+                      <Button
+                        variant="outline"
+                        onClick={() => document.getElementById("edit-file-upload")?.click()}
+                      >
                         Choose Files
                       </Button>
-                      <p className="text-xs text-slate-500 mt-2">Supported formats: PDF, PNG, JPG (Max 10MB each)</p>
+                      <p className="text-xs text-slate-500 mt-2">
+                        Supported formats: PDF, PNG, JPG (Max 10MB each)
+                      </p>
                     </div>
+
                     {editRequest.attachments.length > 0 && (
                       <div className="space-y-2">
                         <Label>Current Attachments ({editRequest.attachments.length})</Label>
                         <div className="space-y-2">
                           {editRequest.attachments.map((attachment, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center justify-between p-3 border rounded-lg bg-slate-50"
-                            >
+                            <div key={index} className="flex items-center justify-between p-3 border rounded-lg bg-slate-50">
                               <div className="flex items-center space-x-3 min-w-0 flex-1">
                                 <FileText className="w-4 h-4 text-slate-400" />
                                 <div className="min-w-0 flex-1">
@@ -1982,39 +1947,8 @@ export default function RequestsPage() {
                                 onClick={() => {
                                   setEditRequest({
                                     ...editRequest,
-                                    attachments: editRequest.attachments.filter((_, i) => i !== index),
-                                  })
-                                }}
-                                className="text-red-600 hover:text-red-800"
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {newAttachments.length > 0 && (
-                      <div className="space-y-2">
-                        <Label>New Attachments ({newAttachments.length})</Label>
-                        <div className="space-y-2">
-                          {newAttachments.map((file, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center justify-between p-3 border rounded-lg bg-green-50"
-                            >
-                              <div className="flex items-center space-x-3 min-w-0 flex-1">
-                                <FileText className="w-4 h-4 text-green-600" />
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-medium text-slate-800 truncate">{file.name}</p>
-                                  <p className="text-xs text-slate-600">{(file.size / 1024).toFixed(2)} KB</p>
-                                </div>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setNewAttachments(newAttachments.filter((_, i) => i !== index))
+                                    attachments: editRequest.attachments.filter((_, i) => i !== index)
+                                  });
                                 }}
                                 className="text-red-600 hover:text-red-800"
                               >
@@ -2032,17 +1966,13 @@ export default function RequestsPage() {
                 <div className="flex justify-end gap-3">
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setEditRequest(null)
-                      setNewAttachments([])
-                    }}
+                    onClick={() => setEditRequest(null)}
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={handleUpdateRequest}
                     disabled={
-                      isUpdating ||
                       !editRequest.title ||
                       !editRequest.description ||
                       editRequest.targetDepartments.length === 0

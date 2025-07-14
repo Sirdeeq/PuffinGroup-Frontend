@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast"
 import { api } from "@/utils/api"
 import {
   FileText,
+  Plus,
   Share,
   Search,
   Download,
@@ -45,20 +46,13 @@ import {
   FileAudio,
   Archive,
   Users,
+  Clock,
+  TrendingUp,
   Activity,
   Database,
   Shield,
-  Settings,
-  FolderTree,
-  Building2,
-  CheckCircle,
-  AlertCircle,
-  Folder,
-  Globe,
-  Lock,
-  FolderPlus,
-  Zap,
 } from "lucide-react"
+import Link from "next/link"
 import { redirect } from "next/navigation"
 
 interface FileData {
@@ -93,49 +87,12 @@ interface FileData {
   sharedWithMe: boolean
   comments?: Array<any>
   versions?: Array<any>
-  folder?: {
-    _id: string
-    name: string
-    isPublic: boolean
-  }
-}
-
-interface FolderData {
-  _id: string
-  name: string
-  description: string
-  isDefault: boolean
-  isPublic: boolean
-  accessLevel: "public" | "department" | "private"
-  fileCount: number
-  folderCount: number
-  createdBy: {
-    _id: string
-    firstName: string
-    lastName: string
-    email: string
-  }
-  departments: Array<{
-    _id: string
-    name: string
-    code: string
-  }>
-  canEdit?: boolean
-  canDelete?: boolean
-  canShare?: boolean
-  canUpload?: boolean
-  canCreateSubfolder?: boolean
-  createdAt: string
-  updatedAt: string
 }
 
 export default function AdminFilesPage() {
   const authContext = useAuth()
   const { toast } = useToast()
-
-  // Core state
   const [allFiles, setAllFiles] = useState<FileData[]>([])
-  const [allFolders, setAllFolders] = useState<FolderData[]>([])
   const [filteredFiles, setFilteredFiles] = useState<FileData[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -145,11 +102,6 @@ export default function AdminFilesPage() {
   const [sortBy, setSortBy] = useState<"name" | "date" | "size" | "status">("date")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
 
-  // Folder structure state
-  const [folderStructureInitialized, setFolderStructureInitialized] = useState(false)
-  const [initializingFolders, setInitializingFolders] = useState(false)
-  const [showFolderStructureModal, setShowFolderStructureModal] = useState(false)
-
   // Selected file and modal states
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null)
   const [showViewModal, setShowViewModal] = useState(false)
@@ -158,7 +110,7 @@ export default function AdminFilesPage() {
   const [showShareModal, setShowShareModal] = useState(false)
 
   // Redirect if not authenticated or not admin
-  if (!authContext.isAuthenticated || authContext.user?.role !== "admin") {
+  if (!authContext.isAuthenticated) {
     redirect("/login")
   }
 
@@ -174,109 +126,55 @@ export default function AdminFilesPage() {
     accent: "bg-orange-500",
   }
 
-  // Initialize folder structure
-  const initializeFolderStructure = async () => {
-    try {
-      setInitializingFolders(true)
-      console.log("Initializing folder structure...")
-
-      const response = await api.initializeFolderStructure(authContext)
-      console.log("Folder structure initialization response:", response)
-
-      if (response.success) {
-        setFolderStructureInitialized(true)
-        toast({
-          title: "Success",
-          description: "Folder structure initialized successfully",
-        })
-        // Refresh data after initialization
-        await fetchAllData()
-      } else {
-        throw new Error(response.message || "Failed to initialize folder structure")
-      }
-    } catch (error: any) {
-      console.error("Error initializing folder structure:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to initialize folder structure",
-        variant: "destructive",
-      })
-    } finally {
-      setInitializingFolders(false)
-    }
-  }
-
-  // Fetch all files and folders for admin
-  const fetchAllData = async () => {
-    try {
-      setLoading(true)
-      console.log("Fetching all data for admin...")
-
-      // Fetch files with includeAll parameter for admin
-      const filesResponse = await api.getFiles({ includeAll: true }, authContext)
-      console.log("Admin Files API Response:", filesResponse)
-
-      if (filesResponse.success) {
-        let files = []
-        // Handle different response structures
-        if (filesResponse.files && Array.isArray(filesResponse.files)) {
-          files = filesResponse.files
-        } else if (filesResponse.data && filesResponse.data.files && Array.isArray(filesResponse.data.files)) {
-          files = filesResponse.data.files
-        } else if (Array.isArray(filesResponse.data)) {
-          files = filesResponse.data
-        }
-
-        console.log(`Loaded ${files.length} files for admin`)
-        setAllFiles(files)
-        setFilteredFiles(files)
-      }
-
-      // Fetch folders with includeAll parameter for admin
-      const foldersResponse = await api.getFolders({ includeAll: true }, authContext)
-      console.log("Admin Folders API Response:", foldersResponse)
-
-      if (foldersResponse.success) {
-        let folders = []
-        if (foldersResponse.folders && Array.isArray(foldersResponse.folders)) {
-          folders = foldersResponse.folders
-        } else if (
-          foldersResponse.data &&
-          foldersResponse.data.folders &&
-          Array.isArray(foldersResponse.data.folders)
-        ) {
-          folders = foldersResponse.data.folders
-        } else if (Array.isArray(foldersResponse.data)) {
-          folders = foldersResponse.data
-        }
-
-        console.log(`Loaded ${folders.length} folders for admin`)
-        setAllFolders(folders)
-
-        // Check if folder structure is initialized (has default public folder)
-        const hasDefaultPublicFolder = folders.some((folder) => folder.isDefault && folder.isPublic)
-        setFolderStructureInitialized(hasDefaultPublicFolder)
-      }
-    } catch (error: any) {
-      console.error("Error fetching admin data:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load data. Please try again.",
-        variant: "destructive",
-      })
-      setAllFiles([])
-      setAllFolders([])
-      setFilteredFiles([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // Fetch all files for admin
   useEffect(() => {
-    if (authContext.user?.role === "admin") {
-      fetchAllData()
+    const fetchAllFiles = async () => {
+      try {
+        setLoading(true)
+        console.log("Fetching all files for admin...")
+
+        // Admin should see ALL files across all departments
+        const response = await api.getFiles({ role: "admin", includeAll: true }, authContext)
+        console.log("Admin Files API Response:", response)
+
+        if (response.success) {
+          let files = []
+
+          // Handle different response structures
+          if (response.files && Array.isArray(response.files)) {
+            files = response.files
+          } else if (response.data && response.data.files && Array.isArray(response.data.files)) {
+            files = response.data.files
+          } else if (Array.isArray(response.data)) {
+            files = response.data
+          }
+
+          console.log(`Loaded ${files.length} files for admin`)
+          setAllFiles(files)
+          setFilteredFiles(files)
+        } else {
+          console.warn("Failed to fetch files:", response.message)
+          setAllFiles([])
+          setFilteredFiles([])
+        }
+      } catch (error) {
+        console.error("Error fetching admin files:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load files. Please try again.",
+          variant: "destructive",
+        })
+        setAllFiles([])
+        setFilteredFiles([])
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [authContext])
+
+    if (authContext.user?.role === "admin") {
+      fetchAllFiles()
+    }
+  }, [authContext, toast])
 
   // Filter and sort files
   useEffect(() => {
@@ -306,6 +204,7 @@ export default function AdminFilesPage() {
     // Sort files
     filtered.sort((a, b) => {
       let aValue: any, bValue: any
+
       switch (sortBy) {
         case "name":
           aValue = (a.title || a.name || "").toLowerCase()
@@ -339,6 +238,7 @@ export default function AdminFilesPage() {
 
   const handleDeleteFile = async () => {
     if (!selectedFile) return
+
     try {
       setIsProcessing(true)
       const response = await api.deleteFile(selectedFile._id, authContext)
@@ -426,23 +326,6 @@ export default function AdminFilesPage() {
     return <FileText className="w-6 h-6 text-gray-600" />
   }
 
-  const getFolderIcon = (accessLevel: string, isDefault = false, isPublic = false) => {
-    if (isDefault) {
-      return <Folder className="w-6 h-6 text-blue-600" />
-    }
-    if (isPublic) {
-      return <Globe className="w-6 h-6 text-green-600" />
-    }
-    switch (accessLevel) {
-      case "public":
-        return <Globe className="w-6 h-6 text-green-600" />
-      case "private":
-        return <Lock className="w-6 h-6 text-red-600" />
-      default:
-        return <Users className="w-6 h-6 text-orange-600" />
-    }
-  }
-
   const getFileStats = () => {
     const safeFiles = Array.isArray(allFiles) ? allFiles : []
     return {
@@ -456,19 +339,7 @@ export default function AdminFilesPage() {
     }
   }
 
-  const getFolderStats = () => {
-    const safeFolders = Array.isArray(allFolders) ? allFolders : []
-    return {
-      total: safeFolders.length,
-      public: safeFolders.filter((f) => f.isPublic || f.accessLevel === "public").length,
-      department: safeFolders.filter((f) => f.accessLevel === "department").length,
-      private: safeFolders.filter((f) => f.accessLevel === "private").length,
-      default: safeFolders.filter((f) => f.isDefault).length,
-    }
-  }
-
   const fileStats = getFileStats()
-  const folderStats = getFolderStats()
 
   const getStatusCounts = () => {
     const safeFiles = Array.isArray(allFiles) ? allFiles : []
@@ -516,8 +387,9 @@ export default function AdminFilesPage() {
     setShowShareModal(true)
   }
 
-  const refreshData = () => {
-    fetchAllData()
+  const refreshFiles = () => {
+    setLoading(true)
+    window.location.reload()
   }
 
   if (loading) {
@@ -528,7 +400,7 @@ export default function AdminFilesPage() {
             <div className={`w-16 h-16 rounded-full ${themeColors.accent} animate-pulse mx-auto`} />
             <div className="space-y-2">
               <h3 className="text-xl font-semibold text-gray-900">Loading Admin File Manager</h3>
-              <p className="text-gray-600">Fetching all files and folders across departments...</p>
+              <p className="text-gray-600">Fetching all files across departments...</p>
               <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
                 <Database className="w-4 h-4 animate-pulse" />
                 <span>Accessing system files</span>
@@ -557,7 +429,7 @@ export default function AdminFilesPage() {
                     SYSTEM ADMIN
                   </Badge>
                 </div>
-                <p className="text-gray-600 text-lg">Complete oversight of all files and folders across departments</p>
+                <p className="text-gray-600 text-lg">Complete oversight of all files across departments and users</p>
                 <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
                   <div className="flex items-center gap-1">
                     <Database className="w-4 h-4" />
@@ -576,70 +448,30 @@ export default function AdminFilesPage() {
             </div>
 
             <div className="flex items-center space-x-4">
-              {/* Folder Structure Status */}
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-50">
-                <FolderTree className="w-5 h-5 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">
-                  Structure:{" "}
-                  {folderStructureInitialized ? (
-                    <span className="text-green-600 flex items-center gap-1">
-                      <CheckCircle className="w-4 h-4" />
-                      Initialized
-                    </span>
-                  ) : (
-                    <span className="text-orange-600 flex items-center gap-1">
-                      <AlertCircle className="w-4 h-4" />
-                      Not Initialized
-                    </span>
-                  )}
-                </span>
-              </div>
-
-              {!folderStructureInitialized && (
-                <Button
-                  onClick={initializeFolderStructure}
-                  disabled={initializingFolders}
-                  className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 h-12 px-6`}
-                >
-                  {initializingFolders ? (
-                    <>
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                      Initializing...
-                    </>
-                  ) : (
-                    <>
-                      <Settings className="w-5 h-5 mr-2" />
-                      Initialize Structure
-                    </>
-                  )}
-                </Button>
-              )}
-
               <Button
                 variant="outline"
-                onClick={() => setShowFolderStructureModal(true)}
-                className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 bg-transparent h-12 px-6"
-              >
-                <FolderTree className="w-5 h-5" />
-                View Structure
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={refreshData}
+                onClick={refreshFiles}
                 disabled={loading}
                 className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 bg-transparent h-12 px-6"
               >
                 <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
                 Refresh System
               </Button>
+
+              {/* <Link href="/files/create">
+                <Button
+                  className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 h-12 px-6`}
+                >
+                  <Plus className="w-5 h-5 mr-2" />
+                  Create New File
+                </Button>
+              </Link> */}
             </div>
           </div>
         </div>
 
         {/* Enhanced Admin Stats Dashboard */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
-          {/* File Stats */}
           <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md bg-gradient-to-br from-blue-50 to-blue-100">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -659,27 +491,12 @@ export default function AdminFilesPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-purple-600 mb-1">Total Folders</p>
-                  <p className="text-3xl font-bold text-purple-900">{folderStats.total}</p>
-                  <p className="text-xs text-purple-500 mt-1">All types</p>
+                  <p className="text-sm font-medium text-purple-600 mb-1">Drafts</p>
+                  <p className="text-3xl font-bold text-purple-900">{fileStats.draft}</p>
+                  <p className="text-xs text-purple-500 mt-1">In progress</p>
                 </div>
                 <div className="p-3 rounded-2xl bg-purple-200">
-                  <FolderTree className="w-6 h-6 text-purple-700" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md bg-gradient-to-br from-green-50 to-green-100">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-green-600 mb-1">Public Folders</p>
-                  <p className="text-3xl font-bold text-green-900">{folderStats.public}</p>
-                  <p className="text-xs text-green-500 mt-1">Accessible to all</p>
-                </div>
-                <div className="p-3 rounded-2xl bg-green-200">
-                  <Globe className="w-6 h-6 text-green-700" />
+                  <Edit className="w-6 h-6 text-purple-700" />
                 </div>
               </div>
             </CardContent>
@@ -689,12 +506,27 @@ export default function AdminFilesPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-orange-600 mb-1">Dept Folders</p>
-                  <p className="text-3xl font-bold text-orange-900">{folderStats.department}</p>
-                  <p className="text-xs text-orange-500 mt-1">Department only</p>
+                  <p className="text-sm font-medium text-orange-600 mb-1">Pending</p>
+                  <p className="text-3xl font-bold text-orange-900">{fileStats.pending}</p>
+                  <p className="text-xs text-orange-500 mt-1">Awaiting review</p>
                 </div>
                 <div className="p-3 rounded-2xl bg-orange-200">
-                  <Building2 className="w-6 h-6 text-orange-700" />
+                  <Clock className="w-6 h-6 text-orange-700" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md bg-gradient-to-br from-green-50 to-green-100">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-green-600 mb-1">Approved</p>
+                  <p className="text-3xl font-bold text-green-900">{fileStats.approved}</p>
+                  <p className="text-xs text-green-500 mt-1">Completed</p>
+                </div>
+                <div className="p-3 rounded-2xl bg-green-200">
+                  <TrendingUp className="w-6 h-6 text-green-700" />
                 </div>
               </div>
             </CardContent>
@@ -704,7 +536,7 @@ export default function AdminFilesPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-indigo-600 mb-1">Active Files</p>
+                  <p className="text-sm font-medium text-indigo-600 mb-1">Active</p>
                   <p className="text-3xl font-bold text-indigo-900">{fileStats.active}</p>
                   <p className="text-xs text-indigo-500 mt-1">In circulation</p>
                 </div>
@@ -719,7 +551,7 @@ export default function AdminFilesPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-teal-600 mb-1">Shared Files</p>
+                  <p className="text-sm font-medium text-teal-600 mb-1">Shared</p>
                   <p className="text-3xl font-bold text-teal-900">{fileStats.shared}</p>
                   <p className="text-xs text-teal-500 mt-1">Collaborative</p>
                 </div>
@@ -730,59 +562,6 @@ export default function AdminFilesPage() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Folder Structure Status Card */}
-        {!folderStructureInitialized && (
-          <Card className="border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-2xl bg-orange-100">
-                    <AlertCircle className="w-8 h-8 text-orange-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-orange-900 mb-1">Folder Structure Not Initialized</h3>
-                    <p className="text-orange-700 mb-2">
-                      The system folder structure needs to be initialized to create department folders and organize
-                      files properly.
-                    </p>
-                    <div className="flex items-center gap-4 text-sm text-orange-600">
-                      <div className="flex items-center gap-1">
-                        <FolderPlus className="w-4 h-4" />
-                        <span>Creates default public folder</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Building2 className="w-4 h-4" />
-                        <span>Auto-creates department folders</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Shield className="w-4 h-4" />
-                        <span>Sets up proper permissions</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  onClick={initializeFolderStructure}
-                  disabled={initializingFolders}
-                  className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 h-12 px-8`}
-                >
-                  {initializingFolders ? (
-                    <>
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                      Initializing Structure...
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="w-5 h-5 mr-2" />
-                      Initialize Now
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Enhanced Search and Controls */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
@@ -919,29 +698,15 @@ export default function AdminFilesPage() {
                       ? "Try adjusting your search terms or filter criteria"
                       : "No files have been uploaded to the system yet"}
                   </p>
-                  {!searchTerm && filterStatus === "all" && !folderStructureInitialized && (
-                    <div className="space-y-4">
-                      <p className="text-orange-600 font-medium">
-                        Initialize the folder structure first to enable file uploads
-                      </p>
+                  {!searchTerm && filterStatus === "all" && (
+                    <Link href="/files/create">
                       <Button
-                        onClick={initializeFolderStructure}
-                        disabled={initializingFolders}
                         className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white h-12 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105`}
                       >
-                        {initializingFolders ? (
-                          <>
-                            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                            Initializing...
-                          </>
-                        ) : (
-                          <>
-                            <Settings className="w-5 h-5 mr-2" />
-                            Initialize Structure
-                          </>
-                        )}
+                        <Plus className="w-5 h-5 mr-2" />
+                        Create First File
                       </Button>
-                    </div>
+                    </Link>
                   )}
                 </div>
               </div>
@@ -1046,15 +811,8 @@ export default function AdminFilesPage() {
                             )}
                           </div>
 
-                          {file.folder && (
-                            <div className="flex items-center gap-2 text-xs text-gray-500 bg-blue-50 px-2 py-1 rounded-lg">
-                              {getFolderIcon(file.folder.isPublic ? "public" : "private")}
-                              <span>In: {file.folder.name}</span>
-                            </div>
-                          )}
-
                           {file.sharedWith && file.sharedWith.length > 0 && (
-                            <div className="flex items-center gap-1 text-xs text-gray-500 bg-green-50 px-2 py-1 rounded-lg">
+                            <div className="flex items-center gap-1 text-xs text-gray-500 bg-blue-50 px-2 py-1 rounded-lg">
                               <Share className="w-3 h-3" />
                               <span>
                                 Shared with {file.sharedWith.length} recipient{file.sharedWith.length > 1 ? "s" : ""}
@@ -1092,7 +850,6 @@ export default function AdminFilesPage() {
                         <TableRow className="hover:bg-gray-50">
                           <TableHead className="font-semibold text-gray-900 py-4">File</TableHead>
                           <TableHead className="font-semibold text-gray-900">Creator</TableHead>
-                          <TableHead className="font-semibold text-gray-900">Folder</TableHead>
                           <TableHead className="font-semibold text-gray-900">Category</TableHead>
                           <TableHead className="font-semibold text-gray-900">Priority</TableHead>
                           <TableHead className="font-semibold text-gray-900">Status</TableHead>
@@ -1128,21 +885,6 @@ export default function AdminFilesPage() {
                                   {file.createdBy?.email || ""}
                                 </p>
                               </div>
-                            </TableCell>
-                            <TableCell>
-                              {file.folder ? (
-                                <div className="flex items-center gap-2">
-                                  {getFolderIcon(file.folder.isPublic ? "public" : "private")}
-                                  <span className="text-sm font-medium">{file.folder.name}</span>
-                                  {file.folder.isPublic && (
-                                    <Badge variant="outline" className="text-xs bg-green-50 text-green-700">
-                                      Public
-                                    </Badge>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-gray-400 text-sm">No folder</span>
-                              )}
                             </TableCell>
                             <TableCell>
                               {file.category ? (
@@ -1239,93 +981,6 @@ export default function AdminFilesPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Folder Structure Modal */}
-        <Dialog open={showFolderStructureModal} onOpenChange={setShowFolderStructureModal}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
-                <FolderTree className="w-8 h-8 text-orange-600" />
-                System Folder Structure
-              </DialogTitle>
-              <DialogDescription>
-                Overview of all folders in the system with their access levels and file counts
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-6">
-              {/* Folder Stats */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="p-4 bg-blue-50 rounded-xl text-center">
-                  <p className="text-2xl font-bold text-blue-900">{folderStats.total}</p>
-                  <p className="text-sm text-blue-600">Total Folders</p>
-                </div>
-                <div className="p-4 bg-green-50 rounded-xl text-center">
-                  <p className="text-2xl font-bold text-green-900">{folderStats.public}</p>
-                  <p className="text-sm text-green-600">Public</p>
-                </div>
-                <div className="p-4 bg-orange-50 rounded-xl text-center">
-                  <p className="text-2xl font-bold text-orange-900">{folderStats.department}</p>
-                  <p className="text-sm text-orange-600">Department</p>
-                </div>
-                <div className="p-4 bg-red-50 rounded-xl text-center">
-                  <p className="text-2xl font-bold text-red-900">{folderStats.private}</p>
-                  <p className="text-sm text-red-600">Private</p>
-                </div>
-              </div>
-
-              {/* Folders List */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900">All Folders</h3>
-                <div className="max-h-96 overflow-y-auto space-y-2">
-                  {allFolders.map((folder) => (
-                    <div
-                      key={folder._id}
-                      className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-gray-50"
-                    >
-                      <div className="flex items-center gap-3">
-                        {getFolderIcon(folder.accessLevel, folder.isDefault, folder.isPublic)}
-                        <div>
-                          <p className="font-semibold text-gray-900">{folder.name}</p>
-                          <p className="text-sm text-gray-500">{folder.description}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right text-sm">
-                          <p className="font-medium text-gray-900">{folder.fileCount} files</p>
-                          <p className="text-gray-500">{folder.folderCount} subfolders</p>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <Badge
-                            variant="outline"
-                            className={`text-xs ${
-                              folder.isPublic || folder.accessLevel === "public"
-                                ? "bg-green-100 text-green-700"
-                                : folder.accessLevel === "private"
-                                  ? "bg-red-100 text-red-700"
-                                  : "bg-orange-100 text-orange-700"
-                            }`}
-                          >
-                            {folder.isPublic || folder.accessLevel === "public"
-                              ? "Public"
-                              : folder.accessLevel === "private"
-                                ? "Private"
-                                : "Department"}
-                          </Badge>
-                          {folder.isDefault && (
-                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
-                              Default
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
         {/* Enhanced View File Modal */}
         <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl">
@@ -1397,21 +1052,6 @@ export default function AdminFilesPage() {
                     <p className="text-sm text-gray-900 mt-1">{new Date(selectedFile.createdAt).toLocaleString()}</p>
                   </div>
                 </div>
-
-                {selectedFile.folder && (
-                  <div className="p-4 bg-blue-50 rounded-xl">
-                    <Label className="text-sm font-medium text-blue-600">Folder Location</Label>
-                    <div className="flex items-center gap-2 mt-2">
-                      {getFolderIcon(selectedFile.folder.isPublic ? "public" : "private")}
-                      <span className="text-sm font-medium text-blue-900">{selectedFile.folder.name}</span>
-                      {selectedFile.folder.isPublic && (
-                        <Badge variant="outline" className="text-xs bg-green-100 text-green-700">
-                          Public
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 {selectedFile.sharedWith && selectedFile.sharedWith.length > 0 && (
                   <div className="p-4 bg-blue-50 rounded-xl">

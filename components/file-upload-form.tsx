@@ -1,7 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
 import type React from "react"
-
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { api } from "@/utils/api"
-import { Upload, FileText, Loader2, Building2, Folder } from "lucide-react"
+import { Upload, FileText, Loader2, Building2, Folder, X, Plus } from "lucide-react"
 
 interface FileUploadFormProps {
   onClose: () => void
@@ -29,7 +28,7 @@ export default function FileUploadForm({
 }: FileUploadFormProps) {
   const { toast } = useToast()
   const [isUploading, setIsUploading] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [folders, setFolders] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
   const [formData, setFormData] = useState({
@@ -39,7 +38,6 @@ export default function FileUploadForm({
     priority: "medium",
     folderId: currentFolder?._id || "",
     departments: [] as string[],
-    // requiresSignature: false,
   })
 
   // Fetch folders and departments
@@ -47,7 +45,7 @@ export default function FileUploadForm({
     const fetchData = async () => {
       try {
         const [foldersResponse, deptResponse] = await Promise.all([
-          api.getFolders(authContext),
+          api.getFolders({}, authContext),
           api.getDepartments({ includeInactive: false }, authContext),
         ])
 
@@ -67,22 +65,36 @@ export default function FileUploadForm({
   }, [authContext])
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      setSelectedFile(file)
-      if (!formData.name) {
-        setFormData((prev) => ({ ...prev, name: file.name }))
+    const files = Array.from(event.target.files || [])
+    if (files.length > 0) {
+      setSelectedFiles((prev) => [...prev, ...files])
+
+      // Set name from first file if no name is set
+      if (!formData.name && files[0]) {
+        setFormData((prev) => ({ ...prev, name: files[0].name }))
       }
     }
+  }
+
+  const removeFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (!bytes || bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!selectedFile) {
+    if (selectedFiles.length === 0) {
       toast({
         title: "Error",
-        description: "Please select a file to upload",
+        description: "Please select at least one file to upload",
         variant: "destructive",
       })
       return
@@ -91,40 +103,46 @@ export default function FileUploadForm({
     try {
       setIsUploading(true)
 
-      const uploadFormData = new FormData()
-      uploadFormData.append("file", selectedFile)
-      uploadFormData.append("name", formData.name)
-      uploadFormData.append("description", formData.description)
-      uploadFormData.append("category", formData.category)
-      uploadFormData.append("priority", formData.priority)
-      // uploadFormData.append("requiresSignature", formData.requiresSignature.toString())
+      // Upload files one by one or in batch
+      const uploadPromises = selectedFiles.map(async (file, index) => {
+        const uploadFormData = new FormData()
+        uploadFormData.append("file", file)
+        uploadFormData.append("name", selectedFiles.length === 1 ? formData.name : file.name)
+        uploadFormData.append("description", formData.description)
+        uploadFormData.append("category", formData.category)
+        uploadFormData.append("priority", formData.priority)
 
-      // Add folder ID if selected
-      if (formData.folderId) {
-        uploadFormData.append("folderId", formData.folderId)
-      }
+        // Add folder ID if selected
+        if (formData.folderId) {
+          uploadFormData.append("folderId", formData.folderId)
+        }
 
-      // Add departments
-      formData.departments.forEach((deptId) => {
-        uploadFormData.append("departments[]", deptId)
+        // Add departments
+        formData.departments.forEach((deptId) => {
+          uploadFormData.append("departments[]", deptId)
+        })
+
+        return api.uploadFile(uploadFormData, authContext)
       })
 
-      const response = await api.uploadFile(uploadFormData, authContext)
+      const results = await Promise.all(uploadPromises)
+      const successCount = results.filter((result) => result.success).length
+      const failCount = results.length - successCount
 
-      if (response.success) {
+      if (successCount > 0) {
         toast({
           title: "Success",
-          description: "File uploaded successfully",
+          description: `${successCount} file(s) uploaded successfully${failCount > 0 ? `, ${failCount} failed` : ""}`,
         })
         onSuccess()
       } else {
-        throw new Error(response.message || "Upload failed")
+        throw new Error("All uploads failed")
       }
     } catch (error: any) {
       console.error("Upload error:", error)
       toast({
         title: "Upload Failed",
-        description: error.message || "Failed to upload file",
+        description: error.message || "Failed to upload files",
         variant: "destructive",
       })
     } finally {
@@ -135,47 +153,73 @@ export default function FileUploadForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* File Selection */}
-      <div className="space-y-2">
-        <Label htmlFor="file-upload">Select File</Label>
+      <div className="space-y-4">
+        <Label htmlFor="file-upload">Select Files</Label>
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
           <input
             id="file-upload"
             type="file"
+            multiple
             onChange={handleFileSelect}
             className="hidden"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.txt,.csv"
           />
           <label htmlFor="file-upload" className="cursor-pointer">
-            {selectedFile ? (
-              <div className="flex items-center justify-center space-x-2">
-                <FileText className="w-8 h-8 text-blue-500" />
-                <div>
-                  <p className="font-medium">{selectedFile.name}</p>
-                  <p className="text-sm text-gray-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-lg font-medium text-gray-700">Click to upload a file</p>
-                <p className="text-sm text-gray-500">PDF, DOC, XLS, or image files up to 15MB</p>
-              </div>
-            )}
+            <div>
+              <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-lg font-medium text-gray-700">Click to upload files</p>
+              <p className="text-sm text-gray-500">PDF, DOC, XLS, images, or other files up to 15MB each</p>
+              <p className="text-xs text-gray-400 mt-2">You can select multiple files at once</p>
+            </div>
           </label>
         </div>
+
+        {/* Selected Files Display */}
+        {selectedFiles.length > 0 && (
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Selected Files ({selectedFiles.length})</Label>
+            <div className="max-h-48 overflow-y-auto border rounded-lg p-3 space-y-2">
+              {selectedFiles.map((file, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <FileText className="w-5 h-5 text-blue-500" />
+                    <div>
+                      <p className="font-medium text-sm">{file.name}</p>
+                      <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeFile(index)}
+                    className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* File Details */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="file-name">File Name</Label>
+          <Label htmlFor="file-name">
+            {selectedFiles.length === 1 ? "File Name" : "Base Name (for multiple files)"}
+          </Label>
           <Input
             id="file-name"
             value={formData.name}
             onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-            placeholder="Enter file name"
-            required
+            placeholder={selectedFiles.length === 1 ? "Enter file name" : "Base name for files"}
+            required={selectedFiles.length === 1}
           />
+          {selectedFiles.length > 1 && (
+            <p className="text-xs text-gray-500 mt-1">Individual file names will be used for multiple files</p>
+          )}
         </div>
         <div>
           <Label htmlFor="category">Category</Label>
@@ -191,6 +235,7 @@ export default function FileUploadForm({
               <SelectItem value="report">Report</SelectItem>
               <SelectItem value="proposal">Proposal</SelectItem>
               <SelectItem value="policy">Policy</SelectItem>
+              <SelectItem value="image">Image</SelectItem>
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
@@ -203,7 +248,7 @@ export default function FileUploadForm({
           id="description"
           value={formData.description}
           onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-          placeholder="Enter file description"
+          placeholder="Enter description for the file(s)"
           rows={3}
         />
       </div>
@@ -227,7 +272,7 @@ export default function FileUploadForm({
           </Select>
         </div>
         <div>
-          <Label htmlFor="folder">Folder</Label>
+          <Label htmlFor="folder">Destination Folder</Label>
           <Select
             value={formData.folderId}
             onValueChange={(value) => setFormData((prev) => ({ ...prev, folderId: value }))}
@@ -236,15 +281,20 @@ export default function FileUploadForm({
               <SelectValue placeholder={currentFolder ? currentFolder.name : "Select folder"} />
             </SelectTrigger>
             <SelectContent>
-              {folders.map((folder) => (
-                <SelectItem key={folder._id} value={folder._id}>
-                  <div className="flex items-center gap-2">
-                    <Folder className="w-4 h-4" />
-                    {folder.name}
-                    {folder.isDefault && <span className="text-xs text-gray-500">(Default)</span>}
-                  </div>
-                </SelectItem>
-              ))}
+              {folders
+                .filter((folder) => folder.canUpload)
+                .map((folder) => (
+                  <SelectItem key={folder._id} value={folder._id}>
+                    <div className="flex items-center gap-2">
+                      <Folder className="w-4 h-4" />
+                      {folder.name}
+                      {folder.isDefault && <span className="text-xs text-gray-500">(Default)</span>}
+                      {currentFolder && folder._id === currentFolder._id && (
+                        <span className="text-xs text-blue-600">(Current)</span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
@@ -281,18 +331,6 @@ export default function FileUploadForm({
         </div>
       </div>
 
-      {/* Signature Requirement
-      <div className="flex items-center space-x-2">
-        <Checkbox
-          id="requires-signature"
-          checked={formData.requiresSignature}
-          onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, requiresSignature: checked as boolean }))}
-        />
-        <Label htmlFor="requires-signature" className="text-sm">
-          This file requires digital signature
-        </Label>
-      </div> */}
-
       {/* Action Buttons */}
       <div className="flex gap-3 pt-4">
         <Button type="button" variant="outline" onClick={onClose} className="flex-1 bg-transparent">
@@ -300,16 +338,19 @@ export default function FileUploadForm({
         </Button>
         <Button
           type="submit"
-          disabled={isUploading}
+          disabled={isUploading || selectedFiles.length === 0}
           className={`flex-1 ${themeColors.primary} hover:${themeColors.primaryHover} text-white`}
         >
           {isUploading ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Uploading...
+              Uploading {selectedFiles.length} file(s)...
             </>
           ) : (
-            "Upload File"
+            <>
+              <Plus className="w-4 h-4 mr-2" />
+              Upload {selectedFiles.length} File(s)
+            </>
           )}
         </Button>
       </div>
