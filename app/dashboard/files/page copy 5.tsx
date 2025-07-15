@@ -18,13 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/AuthContext"
 import { useToast } from "@/hooks/use-toast"
@@ -64,14 +58,8 @@ import {
   Lock,
   FolderPlus,
   Zap,
-  Bell,
-  ChevronRight,
-  Home,
-  ArrowLeft,
 } from "lucide-react"
 import { redirect } from "next/navigation"
-import { FileUploadModal } from "@/components/file-upload-modal"
-import { FolderForm } from "@/components/folder-form"
 
 interface FileData {
   _id: string
@@ -89,7 +77,6 @@ interface FileData {
     url: string
     size: number
     type: string
-    public_id?: string
   }
   createdBy: {
     _id: string
@@ -110,7 +97,6 @@ interface FileData {
     _id: string
     name: string
     isPublic: boolean
-    accessLevel: string
   }
 }
 
@@ -121,8 +107,8 @@ interface FolderData {
   isDefault: boolean
   isPublic: boolean
   accessLevel: "public" | "department" | "private"
-  fileCount?: number
-  folderCount?: number
+  fileCount: number
+  folderCount: number
   createdBy: {
     _id: string
     firstName: string
@@ -141,41 +127,6 @@ interface FolderData {
   canCreateSubfolder?: boolean
   createdAt: string
   updatedAt: string
-  parentFolder?: {
-    _id: string
-    name: string
-    description?: string
-    createdBy?: string
-    isPublic?: boolean
-    isDefault?: boolean
-    isShared?: boolean
-    departments?: Array<any>
-    accessLevel?: string
-    createdAt?: string
-    updatedAt?: string
-  } | null
-}
-
-interface NotificationData {
-  _id: string
-  user: string
-  message: string
-  file?: {
-    _id: string
-    name: string
-  }
-  folder?: {
-    _id: string
-    name: string
-  }
-  isRead: boolean
-  actionType: string
-  createdBy: {
-    _id: string
-    firstName: string
-    lastName: string
-  }
-  createdAt: string
 }
 
 export default function AdminFilesPage() {
@@ -198,23 +149,13 @@ export default function AdminFilesPage() {
   const [folderStructureInitialized, setFolderStructureInitialized] = useState(false)
   const [initializingFolders, setInitializingFolders] = useState(false)
   const [showFolderStructureModal, setShowFolderStructureModal] = useState(false)
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
-  const [breadcrumbPath, setBreadcrumbPath] = useState<Array<{ id: string; name: string }>>([])
 
   // Selected file and modal states
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null)
-  const [selectedFolder, setSelectedFolder] = useState<FolderData | null>(null)
   const [showViewModal, setShowViewModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
-  const [showUploadModal, setShowUploadModal] = useState(false)
-  const [showFolderForm, setShowFolderForm] = useState(false)
-
-  // Notifications state
-  const [notifications, setNotifications] = useState<NotificationData[]>([])
-  const [unreadNotifications, setUnreadNotifications] = useState(0)
-  const [showNotifications, setShowNotifications] = useState(false)
 
   // Redirect if not authenticated or not admin
   if (!authContext.isAuthenticated || authContext.user?.role !== "admin") {
@@ -233,45 +174,28 @@ export default function AdminFilesPage() {
     accent: "bg-orange-500",
   }
 
-  // Fetch notifications
-  const fetchNotifications = async () => {
-    try {
-      const response = await api.getNotifications(authContext)
-      if (response.success && Array.isArray(response.data)) {
-        setNotifications(response.data)
-        setUnreadNotifications(response.data.filter((n: NotificationData) => !n.isRead).length)
-      }
-    } catch (error) {
-      console.error("Error fetching notifications:", error)
-    }
-  }
-
-  // Mark notification as read
-  const markNotificationAsRead = async (notificationId: string) => {
-    try {
-      await api.markNotificationAsRead(notificationId, authContext)
-      fetchNotifications()
-    } catch (error) {
-      console.error("Error marking notification as read:", error)
-    }
-  }
-
   // Initialize folder structure
   const initializeFolderStructure = async () => {
     try {
       setInitializingFolders(true)
+      console.log("Initializing folder structure...")
+
       const response = await api.initializeFolderStructure(authContext)
+      console.log("Folder structure initialization response:", response)
+
       if (response.success) {
         setFolderStructureInitialized(true)
         toast({
           title: "Success",
           description: "Folder structure initialized successfully",
         })
+        // Refresh data after initialization
         await fetchAllData()
       } else {
         throw new Error(response.message || "Failed to initialize folder structure")
       }
     } catch (error: any) {
+      console.error("Error initializing folder structure:", error)
       toast({
         title: "Error",
         description: error.message || "Failed to initialize folder structure",
@@ -286,40 +210,55 @@ export default function AdminFilesPage() {
   const fetchAllData = async () => {
     try {
       setLoading(true)
+      console.log("Fetching all data for admin...")
 
       // Fetch files with includeAll parameter for admin
-      const filesResponse = await api.getFilesForAdmin(authContext)
-      if (filesResponse.success && Array.isArray(filesResponse.data)) {
-        setAllFiles(filesResponse.data)
-        setFilteredFiles(filesResponse.data)
-      } else {
-        console.error("Files fetch failed:", filesResponse)
-        setAllFiles([])
-        setFilteredFiles([])
+      const filesResponse = await api.getFiles({ includeAll: true }, authContext)
+      console.log("Admin Files API Response:", filesResponse)
+
+      if (filesResponse.success) {
+        let files = []
+        // Handle different response structures
+        if (filesResponse.files && Array.isArray(filesResponse.files)) {
+          files = filesResponse.files
+        } else if (filesResponse.data && filesResponse.data.files && Array.isArray(filesResponse.data.files)) {
+          files = filesResponse.data.files
+        } else if (Array.isArray(filesResponse.data)) {
+          files = filesResponse.data
+        }
+
+        console.log(`Loaded ${files.length} files for admin`)
+        setAllFiles(files)
+        setFilteredFiles(files)
       }
 
       // Fetch folders with includeAll parameter for admin
       const foldersResponse = await api.getFolders({ includeAll: true }, authContext)
+      console.log("Admin Folders API Response:", foldersResponse)
+
       if (foldersResponse.success) {
-        console.log("Folders response:", foldersResponse)
+        let folders = []
+        if (foldersResponse.folders && Array.isArray(foldersResponse.folders)) {
+          folders = foldersResponse.folders
+        } else if (
+          foldersResponse.data &&
+          foldersResponse.data.folders &&
+          Array.isArray(foldersResponse.data.folders)
+        ) {
+          folders = foldersResponse.data.folders
+        } else if (Array.isArray(foldersResponse.data)) {
+          folders = foldersResponse.data
+        }
 
-        // Ensure we have an array of folders
-        const foldersData = Array.isArray(foldersResponse.data.data) ? foldersResponse.data.data : []
-        setAllFolders(foldersData)
+        console.log(`Loaded ${folders.length} folders for admin`)
+        setAllFolders(folders)
 
-        // Check if folder structure is initialized
-        const hasDefaultPublicFolder = foldersData.some((folder: FolderData) => folder.isDefault && folder.isPublic)
+        // Check if folder structure is initialized (has default public folder)
+        const hasDefaultPublicFolder = folders.some((folder) => folder.isDefault && folder.isPublic)
         setFolderStructureInitialized(hasDefaultPublicFolder)
-      } else {
-        console.error("Folders fetch failed:", foldersResponse)
-        setAllFolders([])
-        setFolderStructureInitialized(false)
       }
-
-      // Fetch notifications
-      await fetchNotifications()
     } catch (error: any) {
-      console.error("Error in fetchAllData:", error)
+      console.error("Error fetching admin data:", error)
       toast({
         title: "Error",
         description: "Failed to load data. Please try again.",
@@ -328,7 +267,6 @@ export default function AdminFilesPage() {
       setAllFiles([])
       setAllFolders([])
       setFilteredFiles([])
-      setFolderStructureInitialized(false)
     } finally {
       setLoading(false)
     }
@@ -368,7 +306,6 @@ export default function AdminFilesPage() {
     // Sort files
     filtered.sort((a, b) => {
       let aValue: any, bValue: any
-
       switch (sortBy) {
         case "name":
           aValue = (a.title || a.name || "").toLowerCase()
@@ -425,152 +362,6 @@ export default function AdminFilesPage() {
     }
   }
 
-  const handleDeleteFolder = async () => {
-    if (!selectedFolder) return
-    try {
-      setIsProcessing(true)
-      const response = await api.deleteFolder(selectedFolder._id, authContext)
-      if (response.success) {
-        setAllFolders((prev) => prev.filter((folder) => folder._id !== selectedFolder._id))
-        setShowDeleteDialog(false)
-        setSelectedFolder(null)
-        toast({
-          title: "Success",
-          description: "Folder deleted successfully",
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete folder",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleCreateFolder = async (data: any) => {
-    try {
-      setIsProcessing(true)
-      const response = await api.createFolder(data, authContext)
-      if (response.success) {
-        setAllFolders((prev) => [...prev, response.data])
-        setShowFolderForm(false)
-        toast({
-          title: "Success",
-          description: "Folder created successfully",
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create folder",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleUpdateFolder = async (data: any) => {
-    if (!selectedFolder) return
-    try {
-      setIsProcessing(true)
-      const response = await api.updateFolder(selectedFolder._id, data, authContext)
-      if (response.success) {
-        setAllFolders((prev) => prev.map((folder) => (folder._id === selectedFolder._id ? response.data : folder)))
-        setShowFolderForm(false)
-        setSelectedFolder(null)
-        toast({
-          title: "Success",
-          description: "Folder updated successfully",
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update folder",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleFileUpload = async (formData: FormData) => {
-    try {
-      setIsProcessing(true)
-      const response = await api.createFile(formData, authContext)
-      if (response.success) {
-        setAllFiles((prev) => [...prev, response.data])
-        setShowUploadModal(false)
-        toast({
-          title: "Success",
-          description: "File uploaded successfully",
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to upload file",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  // Get current folder's subfolders and files
-  const getCurrentFolderContents = () => {
-    const subfolders = allFolders.filter((folder) => {
-      if (currentFolderId === null) {
-        // Root level - show folders with no parent or null parent
-        return !folder.parentFolder || folder.parentFolder === null
-      }
-      // Show folders whose parent matches current folder
-      return folder.parentFolder?._id === currentFolderId
-    })
-
-    const folderFiles = allFiles.filter((file) => {
-      if (currentFolderId === null) {
-        return false // Root level doesn't show files directly
-      }
-      return file.folder?._id === currentFolderId
-    })
-
-    return { subfolders, folderFiles }
-  }
-
-  // Navigate to folder
-  const navigateToFolder = async (folderId: string | null, folderName = "Root") => {
-    setCurrentFolderId(folderId)
-
-    if (folderId === null) {
-      setBreadcrumbPath([])
-    } else {
-      try {
-        // Build breadcrumb path
-        const path = []
-        let currentFolder = allFolders.find((f) => f._id === folderId)
-
-        while (currentFolder) {
-          path.unshift({ id: currentFolder._id, name: currentFolder.name })
-          if (currentFolder.parentFolder?._id) {
-            currentFolder = allFolders.find((f) => f._id === currentFolder.parentFolder?._id)
-          } else {
-            break
-          }
-        }
-
-        setBreadcrumbPath(path)
-      } catch (error) {
-        console.error("Error building breadcrumb:", error)
-      }
-    }
-  }
-
-  // Utility functions
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
       case "approved":
@@ -725,11 +516,6 @@ export default function AdminFilesPage() {
     setShowShareModal(true)
   }
 
-  const openFolderForm = (folder?: FolderData) => {
-    setSelectedFolder(folder || null)
-    setShowFolderForm(true)
-  }
-
   const refreshData = () => {
     fetchAllData()
   }
@@ -754,31 +540,25 @@ export default function AdminFilesPage() {
     )
   }
 
-  const { subfolders, folderFiles } = getCurrentFolderContents()
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="space-y-6 p-4 md:p-8">
-        {/* Enhanced Admin Header - Responsive */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-              <div className={`p-4 rounded-2xl ${themeColors.bg} flex-shrink-0`}>
-                <Shield className={`w-6 h-6 md:w-8 md:h-8 ${themeColors.text}`} />
+      <div className="space-y-8 p-8">
+        {/* Enhanced Admin Header */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <div className={`p-4 rounded-2xl ${themeColors.bg}`}>
+                <Shield className={`w-8 h-8 ${themeColors.text}`} />
               </div>
-              <div className="min-w-0">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
-                  <h1 className="text-2xl md:text-4xl font-bold text-gray-900">Admin File Manager</h1>
-                  <Badge
-                    className={`${themeColors.badge} ${themeColors.badgeText} px-3 py-1 text-sm font-medium w-fit`}
-                  >
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <h1 className="text-4xl font-bold text-gray-900">Admin File Manager</h1>
+                  <Badge className={`${themeColors.badge} ${themeColors.badgeText} px-3 py-1 text-sm font-medium`}>
                     SYSTEM ADMIN
                   </Badge>
                 </div>
-                <p className="text-gray-600 text-sm md:text-lg">
-                  Complete oversight of all files and folders across departments
-                </p>
-                <div className="flex flex-wrap items-center gap-4 mt-3 text-xs md:text-sm text-gray-500">
+                <p className="text-gray-600 text-lg">Complete oversight of all files and folders across departments</p>
+                <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
                   <div className="flex items-center gap-1">
                     <Database className="w-4 h-4" />
                     <span>System-wide access</span>
@@ -795,64 +575,20 @@ export default function AdminFilesPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Notifications */}
-              <DropdownMenu open={showNotifications} onOpenChange={setShowNotifications}>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative">
-                    <Bell className="w-5 h-5" />
-                    {unreadNotifications > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-                        {unreadNotifications}
-                      </span>
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-96 p-0" align="end" forceMount>
-                  <DropdownMenuLabel className="px-4 py-3 border-b">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">Notifications</span>
-                      <Button variant="ghost" size="sm" onClick={fetchNotifications}>
-                        <RefreshCw className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </DropdownMenuLabel>
-                  <div className="max-h-96 overflow-y-auto">
-                    {notifications.length > 0 ? (
-                      notifications.map((notification) => (
-                        <DropdownMenuItem
-                          key={notification._id}
-                          className={`px-4 py-3 border-b ${!notification.isRead ? "bg-blue-50" : ""}`}
-                          onClick={() => markNotificationAsRead(notification._id)}
-                        >
-                          <div className="w-full">
-                            <p className="text-sm font-medium">{notification.message}</p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {new Date(notification.createdAt).toLocaleString()}
-                            </p>
-                          </div>
-                        </DropdownMenuItem>
-                      ))
-                    ) : (
-                      <div className="px-4 py-6 text-center text-gray-500">No notifications available</div>
-                    )}
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
+            <div className="flex items-center space-x-4">
               {/* Folder Structure Status */}
-              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 text-xs md:text-sm">
-                <FolderTree className="w-4 h-4 md:w-5 md:h-5 text-gray-600" />
-                <span className="font-medium text-gray-700">
+              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-50">
+                <FolderTree className="w-5 h-5 text-gray-600" />
+                <span className="text-sm font-medium text-gray-700">
                   Structure:{" "}
                   {folderStructureInitialized ? (
                     <span className="text-green-600 flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3 md:w-4 md:h-4" />
+                      <CheckCircle className="w-4 h-4" />
                       Initialized
                     </span>
                   ) : (
                     <span className="text-orange-600 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3 md:w-4 md:h-4" />
+                      <AlertCircle className="w-4 h-4" />
                       Not Initialized
                     </span>
                   )}
@@ -863,16 +599,16 @@ export default function AdminFilesPage() {
                 <Button
                   onClick={initializeFolderStructure}
                   disabled={initializingFolders}
-                  className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 h-10 md:h-12 px-4 md:px-6 text-sm`}
+                  className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 h-12 px-6`}
                 >
                   {initializingFolders ? (
                     <>
-                      <Loader2 className="w-4 h-4 md:w-5 md:h-5 mr-2 animate-spin" />
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                       Initializing...
                     </>
                   ) : (
                     <>
-                      <Settings className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+                      <Settings className="w-5 h-5 mr-2" />
                       Initialize Structure
                     </>
                   )}
@@ -882,113 +618,113 @@ export default function AdminFilesPage() {
               <Button
                 variant="outline"
                 onClick={() => setShowFolderStructureModal(true)}
-                className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 bg-transparent h-10 md:h-12 px-4 md:px-6 text-sm"
+                className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 bg-transparent h-12 px-6"
               >
-                <FolderTree className="w-4 h-4 md:w-5 md:h-5" />
-                <span className="hidden sm:inline">View Structure</span>
+                <FolderTree className="w-5 h-5" />
+                View Structure
               </Button>
 
               <Button
                 variant="outline"
                 onClick={refreshData}
                 disabled={loading}
-                className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 bg-transparent h-10 md:h-12 px-4 md:px-6 text-sm"
+                className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 bg-transparent h-12 px-6"
               >
-                <RefreshCw className={`w-4 h-4 md:w-5 md:h-5 ${loading ? "animate-spin" : ""}`} />
-                <span className="hidden sm:inline">Refresh</span>
+                <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
+                Refresh System
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Enhanced Admin Stats Dashboard - Responsive Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
+        {/* Enhanced Admin Stats Dashboard */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
           {/* File Stats */}
           <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardContent className="p-4 md:p-6">
+            <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs md:text-sm font-medium text-blue-600 mb-1">Total Files</p>
-                  <p className="text-2xl md:text-3xl font-bold text-blue-900">{fileStats.total}</p>
+                  <p className="text-sm font-medium text-blue-600 mb-1">Total Files</p>
+                  <p className="text-3xl font-bold text-blue-900">{fileStats.total}</p>
                   <p className="text-xs text-blue-500 mt-1">System-wide</p>
                 </div>
-                <div className="p-2 md:p-3 rounded-2xl bg-blue-200">
-                  <Database className="w-4 h-4 md:w-6 md:h-6 text-blue-700" />
+                <div className="p-3 rounded-2xl bg-blue-200">
+                  <Database className="w-6 h-6 text-blue-700" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardContent className="p-4 md:p-6">
+            <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs md:text-sm font-medium text-purple-600 mb-1">Total Folders</p>
-                  <p className="text-2xl md:text-3xl font-bold text-purple-900">{folderStats.total}</p>
+                  <p className="text-sm font-medium text-purple-600 mb-1">Total Folders</p>
+                  <p className="text-3xl font-bold text-purple-900">{folderStats.total}</p>
                   <p className="text-xs text-purple-500 mt-1">All types</p>
                 </div>
-                <div className="p-2 md:p-3 rounded-2xl bg-purple-200">
-                  <FolderTree className="w-4 h-4 md:w-6 md:h-6 text-purple-700" />
+                <div className="p-3 rounded-2xl bg-purple-200">
+                  <FolderTree className="w-6 h-6 text-purple-700" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md bg-gradient-to-br from-green-50 to-green-100">
-            <CardContent className="p-4 md:p-6">
+            <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs md:text-sm font-medium text-green-600 mb-1">Public Folders</p>
-                  <p className="text-2xl md:text-3xl font-bold text-green-900">{folderStats.public}</p>
+                  <p className="text-sm font-medium text-green-600 mb-1">Public Folders</p>
+                  <p className="text-3xl font-bold text-green-900">{folderStats.public}</p>
                   <p className="text-xs text-green-500 mt-1">Accessible to all</p>
                 </div>
-                <div className="p-2 md:p-3 rounded-2xl bg-green-200">
-                  <Globe className="w-4 h-4 md:w-6 md:h-6 text-green-700" />
+                <div className="p-3 rounded-2xl bg-green-200">
+                  <Globe className="w-6 h-6 text-green-700" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md bg-gradient-to-br from-orange-50 to-orange-100">
-            <CardContent className="p-4 md:p-6">
+            <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs md:text-sm font-medium text-orange-600 mb-1">Dept Folders</p>
-                  <p className="text-2xl md:text-3xl font-bold text-orange-900">{folderStats.department}</p>
+                  <p className="text-sm font-medium text-orange-600 mb-1">Dept Folders</p>
+                  <p className="text-3xl font-bold text-orange-900">{folderStats.department}</p>
                   <p className="text-xs text-orange-500 mt-1">Department only</p>
                 </div>
-                <div className="p-2 md:p-3 rounded-2xl bg-orange-200">
-                  <Building2 className="w-4 h-4 md:w-6 md:h-6 text-orange-700" />
+                <div className="p-3 rounded-2xl bg-orange-200">
+                  <Building2 className="w-6 h-6 text-orange-700" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md bg-gradient-to-br from-indigo-50 to-indigo-100">
-            <CardContent className="p-4 md:p-6">
+            <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs md:text-sm font-medium text-indigo-600 mb-1">Active Files</p>
-                  <p className="text-2xl md:text-3xl font-bold text-indigo-900">{fileStats.active}</p>
+                  <p className="text-sm font-medium text-indigo-600 mb-1">Active Files</p>
+                  <p className="text-3xl font-bold text-indigo-900">{fileStats.active}</p>
                   <p className="text-xs text-indigo-500 mt-1">In circulation</p>
                 </div>
-                <div className="p-2 md:p-3 rounded-2xl bg-indigo-200">
-                  <Activity className="w-4 h-4 md:w-6 md:h-6 text-indigo-700" />
+                <div className="p-3 rounded-2xl bg-indigo-200">
+                  <Activity className="w-6 h-6 text-indigo-700" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md bg-gradient-to-br from-teal-50 to-teal-100">
-            <CardContent className="p-4 md:p-6">
+            <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs md:text-sm font-medium text-teal-600 mb-1">Shared Files</p>
-                  <p className="text-2xl md:text-3xl font-bold text-teal-900">{fileStats.shared}</p>
+                  <p className="text-sm font-medium text-teal-600 mb-1">Shared Files</p>
+                  <p className="text-3xl font-bold text-teal-900">{fileStats.shared}</p>
                   <p className="text-xs text-teal-500 mt-1">Collaborative</p>
                 </div>
-                <div className="p-2 md:p-3 rounded-2xl bg-teal-200">
-                  <Share className="w-4 h-4 md:w-6 md:h-6 text-teal-700" />
+                <div className="p-3 rounded-2xl bg-teal-200">
+                  <Share className="w-6 h-6 text-teal-700" />
                 </div>
               </div>
             </CardContent>
@@ -998,21 +734,19 @@ export default function AdminFilesPage() {
         {/* Folder Structure Status Card */}
         {!folderStructureInitialized && (
           <Card className="border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50">
-            <CardContent className="p-4 md:p-6">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-2xl bg-orange-100 flex-shrink-0">
-                    <AlertCircle className="w-6 h-6 md:w-8 md:h-8 text-orange-600" />
+                  <div className="p-3 rounded-2xl bg-orange-100">
+                    <AlertCircle className="w-8 h-8 text-orange-600" />
                   </div>
                   <div>
-                    <h3 className="text-lg md:text-xl font-bold text-orange-900 mb-1">
-                      Folder Structure Not Initialized
-                    </h3>
-                    <p className="text-orange-700 mb-2 text-sm md:text-base">
+                    <h3 className="text-xl font-bold text-orange-900 mb-1">Folder Structure Not Initialized</h3>
+                    <p className="text-orange-700 mb-2">
                       The system folder structure needs to be initialized to create department folders and organize
                       files properly.
                     </p>
-                    <div className="flex flex-wrap items-center gap-4 text-xs md:text-sm text-orange-600">
+                    <div className="flex items-center gap-4 text-sm text-orange-600">
                       <div className="flex items-center gap-1">
                         <FolderPlus className="w-4 h-4" />
                         <span>Creates default public folder</span>
@@ -1031,7 +765,7 @@ export default function AdminFilesPage() {
                 <Button
                   onClick={initializeFolderStructure}
                   disabled={initializingFolders}
-                  className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 h-12 px-6 md:px-8 flex-shrink-0`}
+                  className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 h-12 px-8`}
                 >
                   {initializingFolders ? (
                     <>
@@ -1052,8 +786,8 @@ export default function AdminFilesPage() {
 
         {/* Enhanced Search and Controls */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="relative flex-1 max-w-2xl w-full">
+          <div className="flex items-center justify-between gap-6">
+            <div className="relative flex-1 max-w-2xl">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <Input
                 placeholder="Search across all files, creators, categories, and descriptions..."
@@ -1062,7 +796,8 @@ export default function AdminFilesPage() {
                 className="pl-12 h-12 border-gray-200 focus:border-orange-500 focus:ring-orange-500 rounded-xl transition-all duration-200 text-base"
               />
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+
+            <div className="flex items-center space-x-3">
               {/* Sort Options */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1114,21 +849,6 @@ export default function AdminFilesPage() {
                   <List className="w-4 h-4" />
                 </Button>
               </div>
-
-              {/* Upload Button */}
-              <Button
-                onClick={() => setShowUploadModal(true)}
-                className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white h-12 px-6`}
-              >
-                <FileText className="w-5 h-5 mr-2" />
-                Upload File
-              </Button>
-
-              {/* Create Folder Button */}
-              <Button onClick={() => openFolderForm()} variant="outline" className="h-12 px-6 bg-white">
-                <FolderPlus className="w-5 h-5 mr-2" />
-                Create Folder
-              </Button>
             </div>
           </div>
         </div>
@@ -1300,12 +1020,14 @@ export default function AdminFilesPage() {
                           <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed" title={file.description}>
                             {file.description || "No description provided"}
                           </p>
+
                           <div className="flex items-center space-x-2 text-xs text-gray-500">
                             <Calendar className="w-3 h-3" />
                             <span>{new Date(file.createdAt).toLocaleDateString()}</span>
                             <span>•</span>
                             <span>{formatFileSize(file.file.size)}</span>
                           </div>
+
                           <div className="flex flex-wrap gap-2">
                             {file.category && (
                               <Badge variant="outline" className="text-xs capitalize rounded-lg">
@@ -1323,12 +1045,14 @@ export default function AdminFilesPage() {
                               </Badge>
                             )}
                           </div>
+
                           {file.folder && (
                             <div className="flex items-center gap-2 text-xs text-gray-500 bg-blue-50 px-2 py-1 rounded-lg">
-                              {getFolderIcon(file.folder.accessLevel, file.folder.isDefault, file.folder.isPublic)}
+                              {getFolderIcon(file.folder.isPublic ? "public" : "private")}
                               <span>In: {file.folder.name}</span>
                             </div>
                           )}
+
                           {file.sharedWith && file.sharedWith.length > 0 && (
                             <div className="flex items-center gap-1 text-xs text-gray-500 bg-green-50 px-2 py-1 rounded-lg">
                               <Share className="w-3 h-3" />
@@ -1337,6 +1061,7 @@ export default function AdminFilesPage() {
                               </span>
                             </div>
                           )}
+
                           <div className="flex space-x-2 pt-2 border-t border-gray-100">
                             <Button
                               size="sm"
@@ -1407,7 +1132,7 @@ export default function AdminFilesPage() {
                             <TableCell>
                               {file.folder ? (
                                 <div className="flex items-center gap-2">
-                                  {getFolderIcon(file.folder.accessLevel, file.folder.isDefault, file.folder.isPublic)}
+                                  {getFolderIcon(file.folder.isPublic ? "public" : "private")}
                                   <span className="text-sm font-medium">{file.folder.name}</span>
                                   {file.folder.isPublic && (
                                     <Badge variant="outline" className="text-xs bg-green-50 text-green-700">
@@ -1514,22 +1239,22 @@ export default function AdminFilesPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Enhanced Folder Structure Modal */}
+        {/* Folder Structure Modal */}
         <Dialog open={showFolderStructureModal} onOpenChange={setShowFolderStructureModal}>
-          <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
                 <FolderTree className="w-8 h-8 text-orange-600" />
                 System Folder Structure
               </DialogTitle>
               <DialogDescription>
-                Navigate through all folders in the system with their access levels and file counts
+                Overview of all folders in the system with their access levels and file counts
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex flex-col h-full space-y-6">
+            <div className="space-y-6">
               {/* Folder Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <div className="p-4 bg-blue-50 rounded-xl text-center">
                   <p className="text-2xl font-bold text-blue-900">{folderStats.total}</p>
                   <p className="text-sm text-blue-600">Total Folders</p>
@@ -1548,156 +1273,53 @@ export default function AdminFilesPage() {
                 </div>
               </div>
 
-              {/* Breadcrumb Navigation */}
-              <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-xl overflow-x-auto">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => navigateToFolder(null)}
-                  className="flex items-center gap-2 hover:bg-gray-200 flex-shrink-0"
-                >
-                  <Home className="w-4 h-4" />
-                  Root
-                </Button>
-                {breadcrumbPath.map((item, index) => (
-                  <div key={item.id} className="flex items-center gap-2 flex-shrink-0">
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => navigateToFolder(item.id, item.name)}
-                      className="hover:bg-gray-200"
+              {/* Folders List */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900">All Folders</h3>
+                <div className="max-h-96 overflow-y-auto space-y-2">
+                  {allFolders.map((folder) => (
+                    <div
+                      key={folder._id}
+                      className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-gray-50"
                     >
-                      {item.name}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Current Folder Contents */}
-              <div className="flex-1 overflow-y-auto">
-                <div className="space-y-4">
-                  {/* Back Button */}
-                  {currentFolderId !== null && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        const parentPath = breadcrumbPath.slice(0, -1)
-                        const parentId = parentPath.length > 0 ? parentPath[parentPath.length - 1].id : null
-                        navigateToFolder(parentId)
-                      }}
-                      className="flex items-center gap-2 mb-4"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                      Back
-                    </Button>
-                  )}
-
-                  {/* Subfolders */}
-                  {subfolders.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3">Folders ({subfolders.length})</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {subfolders.map((folder) => (
-                          <Card
-                            key={folder._id}
-                            className="hover:shadow-lg transition-all duration-200 cursor-pointer border border-gray-200 hover:border-blue-300"
-                            onClick={() => navigateToFolder(folder._id, folder.name)}
+                      <div className="flex items-center gap-3">
+                        {getFolderIcon(folder.accessLevel, folder.isDefault, folder.isPublic)}
+                        <div>
+                          <p className="font-semibold text-gray-900">{folder.name}</p>
+                          <p className="text-sm text-gray-500">{folder.description}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right text-sm">
+                          <p className="font-medium text-gray-900">{folder.fileCount} files</p>
+                          <p className="text-gray-500">{folder.folderCount} subfolders</p>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <Badge
+                            variant="outline"
+                            className={`text-xs ${
+                              folder.isPublic || folder.accessLevel === "public"
+                                ? "bg-green-100 text-green-700"
+                                : folder.accessLevel === "private"
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-orange-100 text-orange-700"
+                            }`}
                           >
-                            <CardContent className="p-4">
-                              <div className="flex items-center gap-3 mb-2">
-                                {getFolderIcon(folder.accessLevel, folder.isDefault, folder.isPublic)}
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-semibold text-gray-900 truncate">{folder.name}</p>
-                                  <p className="text-sm text-gray-500 truncate">
-                                    {folder.description || "No description"}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <div className="flex flex-wrap gap-1">
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-xs ${
-                                      folder.isPublic || folder.accessLevel === "public"
-                                        ? "bg-green-100 text-green-700"
-                                        : folder.accessLevel === "private"
-                                          ? "bg-red-100 text-red-700"
-                                          : "bg-orange-100 text-orange-700"
-                                    }`}
-                                  >
-                                    {folder.isPublic || folder.accessLevel === "public"
-                                      ? "Public"
-                                      : folder.accessLevel === "private"
-                                        ? "Private"
-                                        : "Department"}
-                                  </Badge>
-                                  {folder.isDefault && (
-                                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
-                                      Default
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="text-right text-xs text-gray-500">
-                                  <p>{folder.fileCount || 0} files</p>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
+                            {folder.isPublic || folder.accessLevel === "public"
+                              ? "Public"
+                              : folder.accessLevel === "private"
+                                ? "Private"
+                                : "Department"}
+                          </Badge>
+                          {folder.isDefault && (
+                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
+                              Default
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  )}
-
-                  {/* Files in current folder */}
-                  {folderFiles.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3">Files ({folderFiles.length})</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {folderFiles.map((file) => (
-                          <Card
-                            key={file._id}
-                            className="hover:shadow-lg transition-all duration-200 border border-gray-200"
-                          >
-                            <CardContent className="p-4">
-                              <div className="flex items-center gap-3 mb-2">
-                                {getFileIcon(file.file.type, file.file.name)}
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-semibold text-gray-900 truncate">{file.title || file.name}</p>
-                                  <p className="text-sm text-gray-500 truncate">
-                                    {file.description || "No description"}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Badge
-                                  className={`text-xs ${getStatusColor(file.status || file.approvalStatus || "active")}`}
-                                >
-                                  {file.status || file.approvalStatus || "Active"}
-                                </Badge>
-                                <div className="text-xs text-gray-500">{formatFileSize(file.file.size)}</div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Empty state */}
-                  {subfolders.length === 0 && folderFiles.length === 0 && (
-                    <div className="text-center py-12">
-                      <Folder className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                        {currentFolderId === null ? "No root folders" : "Empty folder"}
-                      </h3>
-                      <p className="text-gray-600">
-                        {currentFolderId === null
-                          ? "Initialize the folder structure to create root folders"
-                          : "This folder doesn't contain any files or subfolders"}
-                      </p>
-                    </div>
-                  )}
+                  ))}
                 </div>
               </div>
             </div>
@@ -1734,10 +1356,12 @@ export default function AdminFilesPage() {
                     </p>
                   </div>
                 </div>
+
                 <div className="p-4 bg-gray-50 rounded-xl">
                   <Label className="text-sm font-medium text-gray-600">Description</Label>
                   <p className="text-sm text-gray-900 mt-1">{selectedFile.description || "No description provided"}</p>
                 </div>
+
                 <div className="grid grid-cols-2 gap-6">
                   <div className="p-4 bg-gray-50 rounded-xl">
                     <Label className="text-sm font-medium text-gray-600">Priority</Label>
@@ -1759,6 +1383,7 @@ export default function AdminFilesPage() {
                     </Badge>
                   </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-6">
                   <div className="p-4 bg-gray-50 rounded-xl">
                     <Label className="text-sm font-medium text-gray-600">Created By</Label>
@@ -1772,15 +1397,12 @@ export default function AdminFilesPage() {
                     <p className="text-sm text-gray-900 mt-1">{new Date(selectedFile.createdAt).toLocaleString()}</p>
                   </div>
                 </div>
+
                 {selectedFile.folder && (
                   <div className="p-4 bg-blue-50 rounded-xl">
                     <Label className="text-sm font-medium text-blue-600">Folder Location</Label>
                     <div className="flex items-center gap-2 mt-2">
-                      {getFolderIcon(
-                        selectedFile.folder.accessLevel,
-                        selectedFile.folder.isDefault,
-                        selectedFile.folder.isPublic,
-                      )}
+                      {getFolderIcon(selectedFile.folder.isPublic ? "public" : "private")}
                       <span className="text-sm font-medium text-blue-900">{selectedFile.folder.name}</span>
                       {selectedFile.folder.isPublic && (
                         <Badge variant="outline" className="text-xs bg-green-100 text-green-700">
@@ -1790,6 +1412,7 @@ export default function AdminFilesPage() {
                     </div>
                   </div>
                 )}
+
                 {selectedFile.sharedWith && selectedFile.sharedWith.length > 0 && (
                   <div className="p-4 bg-blue-50 rounded-xl">
                     <Label className="text-sm font-medium text-blue-600">
@@ -1807,6 +1430,7 @@ export default function AdminFilesPage() {
                     </div>
                   </div>
                 )}
+
                 <div className="p-4 bg-gray-50 rounded-xl">
                   <Label className="text-sm font-medium text-gray-600">File Attachment</Label>
                   <div className="flex items-center justify-between p-4 border border-gray-200 rounded-xl mt-2 bg-white">
@@ -1825,6 +1449,7 @@ export default function AdminFilesPage() {
                     </Button>
                   </div>
                 </div>
+
                 {selectedFile.comments && selectedFile.comments.length > 0 && (
                   <div className="p-4 bg-gray-50 rounded-xl">
                     <Label className="text-sm font-medium text-gray-600">
@@ -1840,6 +1465,7 @@ export default function AdminFilesPage() {
                     </div>
                   </div>
                 )}
+
                 <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
                   <Button variant="outline" onClick={() => setShowViewModal(false)} className="rounded-xl">
                     Close
@@ -1865,15 +1491,10 @@ export default function AdminFilesPage() {
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
           <AlertDialogContent className="rounded-2xl">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-xl font-bold">
-                {selectedFile ? "Delete File" : "Delete Folder"}
-              </AlertDialogTitle>
+              <AlertDialogTitle className="text-xl font-bold">Delete File</AlertDialogTitle>
               <AlertDialogDescription className="text-gray-600">
-                {selectedFile
-                  ? `Are you sure you want to permanently delete "${selectedFile?.title || selectedFile?.name}"? This action
-                  cannot be undone and will remove the file from the entire system.`
-                  : `Are you sure you want to permanently delete "${selectedFolder?.name}"? This action
-                  cannot be undone and will remove the folder and all its contents from the system.`}
+                Are you sure you want to permanently delete "{selectedFile?.title || selectedFile?.name}"? This action
+                cannot be undone and will remove the file from the entire system.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1881,7 +1502,7 @@ export default function AdminFilesPage() {
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction
-                onClick={selectedFile ? handleDeleteFile : handleDeleteFolder}
+                onClick={handleDeleteFile}
                 disabled={isProcessing}
                 className="bg-red-600 hover:bg-red-700 rounded-xl"
               >
@@ -1891,47 +1512,12 @@ export default function AdminFilesPage() {
                     Deleting...
                   </>
                 ) : (
-                  "Confirm Delete"
+                  "Delete File"
                 )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
-        {/* File Upload Modal */}
-        <FileUploadModal
-          open={showUploadModal}
-          onOpenChange={setShowUploadModal}
-          onSubmit={handleFileUpload}
-          folders={allFolders}
-          currentFolder={currentFolderId}
-          isProcessing={isProcessing}
-        />
-
-        {/* Folder Form Modal */}
-        <Dialog open={showFolderForm} onOpenChange={setShowFolderForm}>
-          <DialogContent className="max-w-md rounded-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                {selectedFolder ? "Edit Folder" : "Create New Folder"}
-              </DialogTitle>
-              <DialogDescription>
-                {selectedFolder
-                  ? "Update folder details and access permissions"
-                  : "Create a new folder with specific access permissions"}
-              </DialogDescription>
-            </DialogHeader>
-            <FolderForm
-              folder={selectedFolder}
-              onSubmit={selectedFolder ? handleUpdateFolder : handleCreateFolder}
-              onCancel={() => {
-                setSelectedFolder(null)
-                setShowFolderForm(false)
-              }}
-              isProcessing={isProcessing}
-            />
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   )

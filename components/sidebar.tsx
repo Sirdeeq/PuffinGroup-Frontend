@@ -161,16 +161,6 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
       ],
     },
     {
-      name: "Settings",
-      icon: Settings,
-      key: "settings",
-      children: [
-        { name: "App Settings", href: "/dashboard/settings/app", icon: Settings },
-        { name: "Profile", href: "/dashboard/settings/profile", icon: User },
-        { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
-      ],
-    },
-    {
       name: "Finance",
       icon: Wallet,
       key: "finance",
@@ -186,6 +176,17 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
       key: "meeting",
       href: "/dashboard/meeting",
     },
+    {
+      name: "Settings",
+      icon: Settings,
+      key: "settings",
+      children: [
+        { name: "App Settings", href: "/dashboard/settings/app", icon: Settings },
+        { name: "Profile", href: "/dashboard/settings/profile", icon: User },
+        { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
+      ],
+    },
+
   ]
 
   const directorNavigation: NavItem[] = [
@@ -193,22 +194,17 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
       name: "Files",
       icon: FileText,
       key: "files",
-      children: [{ name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox }],
+      children: [
+        { name: "File Manager", href: "/dashboard/files/myfiles", icon: Eye },
+        { name: "Files", href: "/dashboard/files/director", icon: Eye },
+        // { name: "Department Files", href: "/dashboard/files/departments", icon: Eye },
+      ],
     },
     {
       name: "Requests",
       icon: MessageSquare,
       key: "requests",
       children: [{ name: "Review Requests", href: "/dashboard/requests/review", icon: Eye }],
-    },
-    {
-      name: "Settings",
-      icon: Settings,
-      key: "settings",
-      children: [
-        { name: "Profile", href: "/dashboard/settings/profile", icon: User },
-        { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
-      ],
     },
     {
       name: "Finance",
@@ -226,6 +222,16 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
       key: "meeting",
       href: "/dashboard/meeting",
     },
+    {
+      name: "Settings",
+      icon: Settings,
+      key: "settings",
+      children: [
+        { name: "Profile", href: "/dashboard/settings/profile", icon: User },
+        { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
+      ],
+    },
+
   ]
 
   const departmentNavigation: NavItem[] = [
@@ -249,17 +255,6 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
       ],
     },
     {
-      name: "Settings",
-      icon: Settings,
-      key: "settings",
-      children: [
-        { name: "Profile", href: "/dashboard/settings/profile", icon: User },
-        { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
-        { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
-        { name: "User Management", href: "/dashboard/settings/usermanagement", icon: Users },
-      ],
-    },
-    {
       name: "Finance",
       icon: Wallet,
       key: "finance",
@@ -275,6 +270,18 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
       key: "meeting",
       href: "/dashboard/meeting",
     },
+    {
+      name: "Settings",
+      icon: Settings,
+      key: "settings",
+      children: [
+        { name: "Profile", href: "/dashboard/settings/profile", icon: User },
+        { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
+        { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
+        { name: "User Management", href: "/dashboard/settings/usermanagement", icon: Users },
+      ],
+    },
+
   ]
 
   const userNavigation: NavItem[] = [

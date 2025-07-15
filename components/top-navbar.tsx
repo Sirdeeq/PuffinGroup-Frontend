@@ -1,8 +1,7 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -18,9 +17,24 @@ import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Bell, LogOut, User, Menu, Crown, Shield, Star } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
-import { Logo } from "@/components/logo"
 import EnhancedSidebar from "@/components/sidebar"
 import { AttendanceWidget } from "@/components/attendance/attendance-widget"
+import { io, Socket } from "socket.io-client"
+interface Notification {
+  _id: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  data?: {
+    priority?: 'high' | 'medium' | 'low';
+    file?: string;
+    folder?: string;
+  };
+}
+import { useToast } from "@/components/ui/use-toast"
+import { api } from "@/utils/api"
+import { LogoNew } from "./logonew"
+
 
 interface UserType {
   id: string
@@ -38,10 +52,203 @@ interface TopNavbarProps {
 }
 
 export default function EnhancedTopNavbar({ user }: TopNavbarProps) {
-  const { logout } = useAuth()
+  const { logout, authContext } = useAuth() // Get authContext from useAuth
   const router = useRouter()
-  const [notifications] = useState(0) // Mock notification count
+  const { toast } = useToast()
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [socket, setSocket] = useState<Socket | null>(null)
+
+  // Fetch notifications using the API function
+  const fetchNotifications = async () => {
+    try {
+      const response = await api.fetchNotifications(authContext)
+      if (response.success) {
+        setNotifications(response.notifications)
+        setUnreadCount(response.notifications?.filter((n: Notification) => !n.isRead)?.length || 0)
+      }
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch notifications",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Mark notification as read using the API function
+  const markAsRead = async (notificationId: string) => {
+    try {
+      // const response = await ApiClient.getInstance().put(
+      //   `/api/notifications/${notificationId}/read`, 
+      //   {}, // empty data object since we're just marking as read
+      //   authContext
+      // )
+
+      const response = api.markAsRead(notificationId, authContext)
+
+      if (response.success) {
+        setNotifications(prev =>
+          prev.map(n =>
+            n._id === notificationId ? { ...n, isRead: true } : n
+          )
+        )
+        setUnreadCount(prev => prev - 1)
+      }
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error)
+      toast({
+        title: "Error",
+        description: "Failed to mark notification as read",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Mark all notifications as read using the API function
+  const markAllAsRead = async () => {
+    try {
+      const response = await api.markAllAsRead(authContext)
+
+      if (response.success) {
+        setNotifications(prev =>
+          prev.map(n => ({ ...n, isRead: true }))
+        )
+        setUnreadCount(0)
+      }
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error)
+      toast({
+        title: "Error",
+        description: "Failed to mark all notifications as read",
+        variant: "destructive",
+      })
+    }
+  }
+
+  useEffect(() => {
+    // Initialize WebSocket connection
+    const newSocket = io(process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001", {
+      withCredentials: true,
+      transports: ["websocket"],
+      auth: {
+        token: localStorage.getItem("token")
+      }
+    })
+
+    setSocket(newSocket)
+
+    // Join user's private room
+    newSocket.emit("joinUserRoom", user.id)
+
+    // Listen for new notifications
+    newSocket.on("newNotification", (notification: Notification) => {
+      setNotifications(prevNotifications => {
+        // Ensure prev is an array before spreading
+        const currentNotifications = Array.isArray(prevNotifications) ? prevNotifications : [];
+        return [notification, ...currentNotifications];
+      });
+      
+      setUnreadCount(prevCount => {
+        // Ensure prev is a number
+        const currentCount = typeof prevCount === 'number' ? prevCount : 0;
+        return currentCount + 1;
+      });
+
+      // Show toast for important notifications
+      if (notification.data?.priority === "high") {
+        toast({
+          title: "New Notification",
+          description: notification.message,
+          variant: "default",
+        })
+      }
+    })
+
+    // Clean up on unmount
+    return () => {
+      newSocket.disconnect()
+    }
+  }, [user.id, toast])
+
+  // Fetch initial notifications
+  useEffect(() => {
+    fetchNotifications()
+  }, [])
+
+  const NotificationsDropdown = () => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative hover:bg-slate-100 transition-colors">
+          <Bell className="w-5 h-5" />
+          {unreadCount > 0 && (
+            <div className="absolute -top-1 -right-1 flex items-center justify-center">
+              <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
+                <span className="text-xs font-bold text-white">{unreadCount}</span>
+              </div>
+            </div>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-96 p-0" align="end" forceMount>
+        <DropdownMenuLabel className="p-4 border-b">
+          <div className="flex justify-between items-center">
+            <span>Notifications</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                markAllAsRead()
+              }}
+            >
+              Mark all as read
+            </Button>
+          </div>
+        </DropdownMenuLabel>
+
+        <div className="max-h-96 overflow-y-auto">
+          {notifications?.length === 0 ? (
+            <div className="p-4 text-center text-sm text-gray-500">
+              No notifications
+            </div>
+          ) : (
+            notifications?.map(notification => (
+              <DropdownMenuItem
+                key={notification._id}
+                className={`p-3 hover:bg-slate-50 rounded-none transition-colors cursor-pointer ${!notification.isRead ? 'bg-blue-50' : ''}`}
+                onClick={() => {
+                  markAsRead(notification._id)
+                  if (notification.data?.file) {
+                    router.push(`/dashboard/files/${notification.data.file}`)
+                  } else if (notification.data?.folder) {
+                    router.push(`/dashboard/folders/${notification.data.folder}`)
+                  }
+                }}
+              >
+                <div className="flex items-start space-x-3">
+                  <div className={`flex-shrink-0 p-2 rounded-full ${notification.isRead ? 'bg-gray-100' : 'bg-blue-100'}`}>
+                    <Bell className={`w-4 h-4 ${notification.isRead ? 'text-gray-500' : 'text-blue-500'}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{notification.message}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(notification.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  {!notification.isRead && (
+                    <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></div>
+                  )}
+                </div>
+              </DropdownMenuItem>
+            ))
+          )}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 
   const getThemeConfig = () => {
     switch (user.role) {
@@ -116,7 +323,7 @@ export default function EnhancedTopNavbar({ user }: TopNavbarProps) {
             </Sheet>
 
             <div className="flex items-center space-x-4">
-              <Logo size="md" showText={false} />
+              <LogoNew size="md" showText={false} />
               <div className="hidden sm:block">
                 <div
                   className={cn(
@@ -141,18 +348,7 @@ export default function EnhancedTopNavbar({ user }: TopNavbarProps) {
             </div>
 
             {/* Notifications */}
-            <div className="relative">
-              <Button variant="ghost" size="icon" className="relative hover:bg-slate-100 transition-colors">
-                <Bell className="w-5 h-5" />
-                {notifications > 0 && (
-                  <div className="absolute -top-1 -right-1 flex items-center justify-center">
-                    <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
-                      <span className="text-xs font-bold text-white">{notifications}</span>
-                    </div>
-                  </div>
-                )}
-              </Button>
-            </div>
+            <NotificationsDropdown />
 
             {/* User Menu */}
             <DropdownMenu>

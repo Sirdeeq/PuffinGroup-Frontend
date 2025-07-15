@@ -21,7 +21,7 @@ export const metadata = {
     siteName: "Puffin Group",
     images: [
       {
-        url: "/logo.png",
+        url: "/favicon.png",
         width: 192,
         height: 192,
       },
@@ -33,11 +33,11 @@ export const metadata = {
     card: "summary_large_image",
     title: "Puffin Group - Document Management System",
     description: "A comprehensive document management system for efficient file handling and collaboration.",
-    images: ["/logo.png"],
+    images: ["/favicon.png"],
   },
   icons: {
-    icon: "/logo.png",
-    apple: "/logo.png",
+    icon: "/favicon.png",
+    apple: "/favicon.png",
   },
 }
 

@@ -59,7 +59,7 @@ export default function LoginPage() {
     }
 
     if (userRole === "director") {
-      window.location.href = "/dashboard/files/myfiles"
+      window.location.href = "/dashboard/files/inbox"
       return
     }
 
@@ -70,7 +70,7 @@ export default function LoginPage() {
     }
 
     // Fallback redirect
-    window.location.href = "/dashboard/files/myfiles"
+    window.location.href = "/dashboard/files/inbox"
   }
 
   // Handle existing authentication
@@ -165,7 +165,7 @@ export default function LoginPage() {
 
   const handleCheckInSuccess = () => {
     setShowCheckInModal(false)
-    window.location.href = "/dashboard/files/myfiles"
+    window.location.href = "/dashboard/files/inbox"
   }
 
   const renderRoleSelection = () => (

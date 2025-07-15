@@ -55,9 +55,6 @@ import {
   ChevronLeft,
   Check,
   X,
-  Bell,
-  ArrowLeft,
-  ExternalLink,
 } from "lucide-react"
 import { redirect } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -120,8 +117,8 @@ interface FolderData {
     isPublic?: boolean
   } | null
   accessLevel: "public" | "department" | "private"
-  fileCount?: number
-  folderCount?: number
+  fileCount: number
+  folderCount: number
   createdBy: {
     _id: string
     firstName: string
@@ -143,29 +140,10 @@ interface FolderData {
 }
 
 interface BreadcrumbItem {
-  id: string
-  name: string
-}
-
-interface NotificationData {
   _id: string
-  message: string
-  isRead: boolean
-  createdAt: string
-  actionType: string
-  file?: {
-    _id: string
-    name: string
-  }
-  folder?: {
-    _id: string
-    name: string
-  }
-  createdBy: {
-    _id: string
-    firstName: string
-    lastName: string
-  }
+  name: string
+  isPublic: boolean
+  isDefault: boolean
 }
 
 type SortOption = "name" | "date" | "size" | "type"
@@ -183,10 +161,6 @@ export default function FileManagerDepartmentPage() {
   const [filteredItems, setFilteredItems] = useState<(FileData | FolderData)[]>([])
   const [currentFolder, setCurrentFolder] = useState<FolderData | null>(null)
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>([])
-
-  // Notifications state
-  const [notifications, setNotifications] = useState<NotificationData[]>([])
-  const [unreadNotifications, setUnreadNotifications] = useState(0)
 
   // Selection state
   const [selectedItems, setSelectedItems] = useState<string[]>([])
@@ -314,57 +288,11 @@ export default function FileManagerDepartmentPage() {
     redirect("/login")
   }
 
-  // Check if user can create folders at current location
-  const canCreateFolder = () => {
-    if (authContext.user?.role === "admin") return true
-    if (authContext.user?.role === "director") return true
-    if (authContext.user?.role === "department") return true
-
-    // if (authContext.user?.role === "department") {
-    //   if (!currentFolder) return false // Can't create at root level
-
-    //   // Can create in their own department folders or private folders they created
-    //   const userDeptId = authContext.user?.department?._id || authContext.user?.department
-    //   const isOwnDepartment = currentFolder.departments.some((dept) => dept._id === userDeptId)
-    //   const isCreatedByUser = currentFolder.createdBy?._id === authContext.user?._id
-
-    //   return (
-    //     (currentFolder.accessLevel === "department" && isOwnDepartment) ||
-    //     (currentFolder.accessLevel === "private" && isCreatedByUser) ||
-    //     (currentFolder.accessLevel === "public" && isOwnDepartment)
-    //   )
-    // }
-
-    return false
-  }
-
-  // Fetch notifications
-  const fetchNotifications = async () => {
-    try {
-      const response = await api.getNotifications(authContext)
-      if (response.success && response.data?.data) {
-        setNotifications(response.data.data)
-        setUnreadNotifications(response.data.data.filter((n: NotificationData) => !n.isRead).length)
-      }
-    } catch (error) {
-      console.error("Error fetching notifications:", error)
-    }
-  }
-
-  // Mark notification as read
-  const markNotificationAsRead = async (notificationId: string) => {
-    try {
-      await api.markNotificationAsRead(notificationId, authContext)
-      fetchNotifications()
-    } catch (error) {
-      console.error("Error marking notification as read:", error)
-    }
-  }
-
   // Get file icon based on file type
   const getFileIcon = (fileType: string, fileName: string) => {
     const type = fileType.toLowerCase()
     const extension = fileName.split(".").pop()?.toLowerCase()
+
     if (type.includes("image") || ["jpg", "jpeg", "png", "gif", "svg", "webp"].includes(extension || "")) {
       return <ImageIcon className="w-8 h-8 text-blue-500" />
     }
@@ -401,14 +329,11 @@ export default function FileManagerDepartmentPage() {
     }
   }
 
-  // Fetch folders and files with department-specific logic
+  // Fetch folders and files
   const fetchData = async () => {
     try {
       setLoading(true)
       console.log("Fetching data for folder:", currentFolder?._id || "root")
-
-      // Get department ID from user
-      const departmentId = authContext.user?.department?._id || authContext.user?.department
 
       // Build query parameters based on current folder
       const folderParams: any = {}
@@ -418,53 +343,23 @@ export default function FileManagerDepartmentPage() {
         folderParams.parentId = "root"
       }
 
-      // For department users, include all folders they can access
-      if (authContext.user?.role === "department" && departmentId) {
-        folderParams.includeAll = true // Include private folders they created
-      }
-
       // Fetch folders
       const foldersResponse = await api.getFolders(folderParams, authContext)
       console.log("Folders response:", foldersResponse)
 
-      if (foldersResponse.success && foldersResponse.data?.data) {
-        // Handle both array response and object with folders property
-        const fetchedFolders = Array.isArray(foldersResponse.data.data)
-          ? foldersResponse.data.data
-          : foldersResponse.data.data.folders || []
-
+      if (foldersResponse.success && foldersResponse.data) {
+        const fetchedFolders = foldersResponse.data.folders || []
         console.log("Setting folders:", fetchedFolders)
-
-        // Process folders to ensure they have required properties
-        const processedFolders = fetchedFolders.map((folder: any) => ({
-          ...folder,
-          fileCount: folder.fileCount || 0,
-          folderCount: folder.folderCount || 0,
-          canEdit: folder.canEdit !== false,
-          canDelete: folder.canDelete !== false && !folder.isDefault,
-          canShare: folder.canShare !== false,
-          canUpload: folder.canUpload !== false,
-          canCreateSubfolder: folder.canCreateSubfolder !== false,
-        }))
-
-        setFolders(processedFolders)
+        setFolders(fetchedFolders)
       }
 
       // Fetch files
-      const filesParams: any = currentFolder ? { folderId: currentFolder._id } : {}
-
-      // Add department filter for department users
-      if (authContext.user?.role === "department" && departmentId) {
-        filesParams.department = departmentId
-      }
-
+      const filesParams = currentFolder ? { folderId: currentFolder._id } : {}
       const filesResponse = await api.getFiles(filesParams, authContext)
       console.log("Files response:", filesResponse)
 
       if (filesResponse.success && filesResponse.data) {
-        // Handle both array response and object with files property
-        const filesData = Array.isArray(filesResponse.data) ? filesResponse.data : filesResponse.data.files || []
-
+        const filesData = filesResponse.data.files || []
         const processedFiles = filesData.map((file: any) => ({
           ...file,
           name: file.name || file.title || "Untitled",
@@ -489,12 +384,7 @@ export default function FileManagerDepartmentPage() {
           folder: file.folder || null,
           departments: file.departments || [],
           isInPublicFolder: file.folder?.isPublic || false,
-          // Check if user can edit/delete based on department and ownership
-          canEdit: file.createdBy?._id === authContext.user?._id || authContext.user?.role === "admin",
-          canDelete: file.createdBy?._id === authContext.user?._id || authContext.user?.role === "admin",
-          canShare: file.canShare !== false,
         }))
-
         console.log("Setting files:", processedFiles)
         setFiles(processedFiles)
       }
@@ -520,9 +410,9 @@ export default function FileManagerDepartmentPage() {
   // Fetch breadcrumb path
   const fetchBreadcrumb = async (folderId: string) => {
     try {
-      const response = await api.getBreadcrumbPath(folderId, authContext)
+      const response = await api.getFolderBreadcrumb(folderId, authContext)
       if (response.success && response.data) {
-        setBreadcrumb(response.data || [])
+        setBreadcrumb(response.data.breadcrumb || [])
       }
     } catch (error) {
       console.error("Error fetching breadcrumb:", error)
@@ -535,7 +425,7 @@ export default function FileManagerDepartmentPage() {
       const [deptResponse, usersResponse, foldersResponse] = await Promise.all([
         api.getDepartments({ includeInactive: false }, authContext),
         api.getUsers(authContext),
-        api.getFolders({ includeAll: true }, authContext), // Get all folders for move operations
+        api.getFolders({}, authContext), // Get all folders for move operations
       ])
 
       if (deptResponse.success && deptResponse.data) {
@@ -548,10 +438,7 @@ export default function FileManagerDepartmentPage() {
       }
 
       if (foldersResponse.success && foldersResponse.data) {
-        const allFolders = Array.isArray(foldersResponse.data)
-          ? foldersResponse.data
-          : foldersResponse.data.folders || []
-        setAvailableFolders(allFolders)
+        setAvailableFolders(foldersResponse.data.folders || [])
       }
     } catch (error) {
       console.error("Error fetching dependencies:", error)
@@ -562,11 +449,10 @@ export default function FileManagerDepartmentPage() {
     if (authContext.isAuthenticated) {
       fetchData()
       fetchDependencies()
-      fetchNotifications()
     }
   }, [authContext, currentFolder])
 
-  // Search, sort, and paginate items with proper filtering logic
+  // FIXED: Search, sort, and paginate items with proper filtering logic
   useEffect(() => {
     console.log("Filtering items. Current folder:", currentFolder?._id)
     console.log("Available folders:", folders)
@@ -575,7 +461,7 @@ export default function FileManagerDepartmentPage() {
     let items: (FileData | FolderData)[] = []
 
     if (!currentFolder) {
-      // At root level: show accessible folders and shared files
+      // At root level: show all accessible folders (public, default, department, private)
       const accessibleFolders = folders.filter((folder) => {
         // Show public and default folders
         if (folder.isPublic || folder.isDefault || folder.accessLevel === "public") {
@@ -590,7 +476,7 @@ export default function FileManagerDepartmentPage() {
               authContext.user?.department &&
               (Array.isArray(authContext.user.department)
                 ? authContext.user.department.includes(dept._id)
-                : authContext.user.department === dept._id || authContext.user.department._id === dept._id),
+                : authContext.user.department === dept._id),
           )
         ) {
           return true
@@ -604,18 +490,19 @@ export default function FileManagerDepartmentPage() {
         return false
       })
 
-      // Show files in public folders and shared files at root level
-      const publicFiles = files.filter(
-        (file) => !file.folder || file.folder.isPublic || file.isInPublicFolder || file.sharedWithMe,
-      )
-      items = [...accessibleFolders, ]
+      // Show files in public folders at root level
+      const publicFiles = files.filter((file) => !file.folder || file.folder.isPublic || file.isInPublicFolder)
+
+      items = [...accessibleFolders, ...publicFiles]
       console.log("Root level items:", items)
     } else {
       // In a specific folder: show subfolders and files in that folder
       const subfolders = folders.filter(
         (folder) => folder.parentFolder && folder.parentFolder._id === currentFolder._id,
       )
+
       const folderFiles = files.filter((file) => file.folder && file.folder._id === currentFolder._id)
+
       items = [...subfolders, ...folderFiles]
       console.log("Folder items:", items)
       console.log("Subfolders found:", subfolders)
@@ -627,6 +514,7 @@ export default function FileManagerDepartmentPage() {
       const name = "name" in item ? item.name : item.title || ""
       const description = item.description || ""
       const createdBy = item.createdBy ? `${item.createdBy.firstName} ${item.createdBy.lastName}` : ""
+
       return (
         name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -644,6 +532,7 @@ export default function FileManagerDepartmentPage() {
       if (!aIsFolder && bIsFolder) return 1
 
       let aValue: any, bValue: any
+
       switch (sortBy) {
         case "name":
           aValue = ("name" in a ? a.name : a.title || "").toLowerCase()
@@ -689,6 +578,7 @@ export default function FileManagerDepartmentPage() {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
     const endIndex = startIndex + ITEMS_PER_PAGE
     const paginatedResult = filtered.slice(startIndex, endIndex)
+
     console.log("Paginated items:", paginatedResult)
     setPaginatedItems(paginatedResult)
   }, [files, folders, searchTerm, sortBy, sortDirection, currentFolder, currentPage, authContext.user])
@@ -702,20 +592,7 @@ export default function FileManagerDepartmentPage() {
   }
 
   const navigateBack = () => {
-    if (breadcrumb.length > 0) {
-      // Navigate to parent folder
-      const parentId = breadcrumb[breadcrumb.length - 2]?.id
-      if (parentId) {
-        const parentFolder = availableFolders.find((f) => f._id === parentId)
-        if (parentFolder) {
-          setCurrentFolder(parentFolder)
-        }
-      } else {
-        setCurrentFolder(null)
-      }
-    } else {
-      setCurrentFolder(null)
-    }
+    setCurrentFolder(null)
     setCurrentPage(1)
     setSelectedItems([])
     setSelectMode(false)
@@ -723,9 +600,9 @@ export default function FileManagerDepartmentPage() {
 
   const navigateToBreadcrumb = async (item: BreadcrumbItem, index: number) => {
     if (index === 0) {
-      setCurrentFolder(null)
+      navigateBack()
     } else {
-      const folder = availableFolders.find((f) => f._id === item.id)
+      const folder = availableFolders.find((f) => f._id === item._id)
       if (folder) {
         await navigateToFolder(folder)
       }
@@ -755,12 +632,9 @@ export default function FileManagerDepartmentPage() {
   const handleCreateFolder = async () => {
     try {
       setIsProcessing(true)
-      const departmentId = authContext.user?.department?._id || authContext.user?.department
-
       const formData = {
         ...folderFormData,
-        parentFolder: currentFolder?._id || null,
-        departments: folderFormData.accessLevel === "department" ? [departmentId] : [],
+        parentFolderId: currentFolder?._id || null,
       }
 
       const response = await api.createFolder(formData, authContext)
@@ -794,6 +668,7 @@ export default function FileManagerDepartmentPage() {
 
   const handleDeleteFile = async () => {
     if (!selectedFile) return
+
     try {
       setIsProcessing(true)
       const response = await api.deleteFile(selectedFile._id, authContext)
@@ -821,6 +696,7 @@ export default function FileManagerDepartmentPage() {
 
   const handleDeleteFolder = async () => {
     if (!selectedFolder) return
+
     try {
       setIsProcessing(true)
       const response = await api.deleteFolder(selectedFolder._id, authContext)
@@ -852,12 +728,14 @@ export default function FileManagerDepartmentPage() {
       const promises = selectedItems.map(async (itemId) => {
         const item = paginatedItems.find((i) => i._id === itemId)
         if (!item) return
+
         if ("file" in item) {
           return api.deleteFile(itemId, authContext)
         } else {
           return api.deleteFolder(itemId, authContext)
         }
       })
+
       await Promise.all(promises)
       toast({
         title: "Success",
@@ -884,8 +762,10 @@ export default function FileManagerDepartmentPage() {
       const promises = selectedItems.map(async (itemId) => {
         const item = paginatedItems.find((i) => i._id === itemId)
         if (!item || !("file" in item)) return // Only move files for now
-        return api.moveFile(itemId, moveFormData.targetFolderId, authContext)
+
+        return api.moveFileToFolder(itemId, moveFormData.targetFolderId, authContext)
       })
+
       await Promise.all(promises)
       toast({
         title: "Success",
@@ -927,11 +807,12 @@ export default function FileManagerDepartmentPage() {
   const handleDrop = async (e: React.DragEvent, targetFolder: FolderData) => {
     e.preventDefault()
     setIsDragOver(null)
+
     if (!draggedFile) return
 
     try {
       setIsProcessing(true)
-      const response = await api.moveFile(draggedFile._id, targetFolder._id, authContext)
+      const response = await api.moveFileToFolder(draggedFile._id, targetFolder._id, authContext)
       if (response.success) {
         toast({
           title: "Success",
@@ -967,6 +848,7 @@ export default function FileManagerDepartmentPage() {
     const now = new Date()
     const diffTime = Math.abs(now.getTime() - date.getTime())
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
     if (diffDays === 1) return "Today"
     if (diffDays === 2) return "Yesterday"
     if (diffDays <= 7) return `${diffDays - 1} days ago`
@@ -1042,6 +924,7 @@ export default function FileManagerDepartmentPage() {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+
       toast({
         title: "Download started",
         description: `Downloading ${file.file.name}`,
@@ -1055,22 +938,19 @@ export default function FileManagerDepartmentPage() {
     }
   }
 
-  // Edit and Share handlers
+  // Edit and Share handlers (placeholder implementations)
   const handleEditSubmit = async () => {
     if (!selectedFile) return
+
     try {
       setIsProcessing(true)
-      const response = await api.updateFile(selectedFile._id, editFormData, authContext)
-      if (response.success) {
-        toast({
-          title: "Success",
-          description: "File updated successfully",
-        })
-        setShowEditModal(false)
-        fetchData()
-      } else {
-        throw new Error(response.message || "Failed to update file")
-      }
+      // Implementation for editing file
+      toast({
+        title: "Success",
+        description: "File updated successfully",
+      })
+      setShowEditModal(false)
+      fetchData()
     } catch (error: any) {
       toast({
         title: "Error",
@@ -1085,28 +965,12 @@ export default function FileManagerDepartmentPage() {
   const handleShareSubmit = async () => {
     try {
       setIsProcessing(true)
-      const itemId = selectedFile?._id || selectedFolder?._id
-      if (!itemId) return
-
-      const shareData = {
-        departments: shareFormData.departments,
-        users: shareFormData.users,
-        message: shareFormData.message,
-      }
-
-      const response = selectedFile
-        ? await api.shareFile(itemId, shareData, authContext)
-        : await api.shareFolder(itemId, shareData, authContext)
-
-      if (response.success) {
-        toast({
-          title: "Success",
-          description: "Item shared successfully",
-        })
-        setShowShareModal(false)
-      } else {
-        throw new Error(response.message || "Failed to share item")
-      }
+      // Implementation for sharing
+      toast({
+        title: "Success",
+        description: "Item shared successfully",
+      })
+      setShowShareModal(false)
     } catch (error: any) {
       toast({
         title: "Error",
@@ -1117,43 +981,6 @@ export default function FileManagerDepartmentPage() {
       setIsProcessing(false)
     }
   }
-
-  // Notification bell component
-  const renderNotificationBell = () => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          {unreadNotifications > 0 && (
-            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-              {unreadNotifications}
-            </span>
-          )}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72 max-h-96 overflow-y-auto">
-        {notifications.length === 0 ? (
-          <DropdownMenuItem className="text-sm text-gray-500">No notifications</DropdownMenuItem>
-        ) : (
-          notifications.map((notification) => (
-            <DropdownMenuItem
-              key={notification._id}
-              onClick={() => {
-                markNotificationAsRead(notification._id)
-                // Handle notification click (e.g., open related file)
-              }}
-              className={`border-b ${!notification.isRead ? "bg-blue-50" : ""}`}
-            >
-              <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">{notification.message}</p>
-                <p className="text-xs text-gray-500">{new Date(notification.createdAt).toLocaleString()}</p>
-              </div>
-            </DropdownMenuItem>
-          ))
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
 
   if (loading) {
     return (
@@ -1171,123 +998,93 @@ export default function FileManagerDepartmentPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
-        {/* Enhanced Header with Breadcrumb and Notifications */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            {/* Left side - Navigation and Title */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 min-w-0 flex-1">
-              {/* Navigation Controls */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {/* Back Button */}
-                {currentFolder && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={navigateBack}
-                    className="h-10 px-3 hover:bg-gray-100 rounded-lg"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                  </Button>
-                )}
-
-                {/* Breadcrumb Navigation */}
-                <div className="flex items-center gap-1 text-sm overflow-x-auto">
-                  <Home className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                  <button
-                    onClick={() => setCurrentFolder(null)}
-                    className="hover:text-blue-600 transition-colors text-gray-600 hover:bg-blue-50 px-2 py-1 rounded-lg whitespace-nowrap"
-                  >
-                    File Manager
-                  </button>
-                  {breadcrumb.map((item, index) => (
-                    <div key={item.id} className="flex items-center gap-1 flex-shrink-0">
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
-                      <button
-                        onClick={() => navigateToBreadcrumb(item, index)}
-                        className={`hover:text-blue-600 transition-colors px-2 py-1 rounded-lg whitespace-nowrap ${
-                          index === breadcrumb.length - 1
-                            ? `font-medium ${themeColors.text} bg-blue-50`
-                            : "text-gray-600 hover:bg-blue-50"
-                        }`}
-                      >
-                        {item.name}
-                      </button>
-                    </div>
-                  ))}
-                </div>
+      <div className="space-y-8 p-8">
+        {/* Enhanced Header with Breadcrumb */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              {/* Enhanced Breadcrumb Navigation */}
+              <div className="flex items-center gap-2 text-sm">
+                <Home className="w-4 h-4 text-gray-500" />
+                <button
+                  onClick={navigateBack}
+                  className="hover:text-blue-600 transition-colors flex items-center gap-1 text-gray-600 hover:bg-blue-50 px-2 py-1 rounded-lg"
+                >
+                  File Manager
+                </button>
+                {breadcrumb.map((item, index) => (
+                  <div key={item._id} className="flex items-center gap-2">
+                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                    <button
+                      onClick={() => navigateToBreadcrumb(item, index)}
+                      className={`hover:text-blue-600 transition-colors px-2 py-1 rounded-lg ${
+                        index === breadcrumb.length - 1
+                          ? `font-medium ${themeColors.text} bg-blue-50`
+                          : "text-gray-600 hover:bg-blue-50"
+                      }`}
+                    >
+                      {item.name}
+                    </button>
+                  </div>
+                ))}
               </div>
 
-              {/* Title Section */}
-              <div className="min-w-0 flex-1">
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 truncate">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">
                   {currentFolder ? currentFolder.name : "Department File Manager"}
                 </h1>
-                <p className="text-sm sm:text-base text-gray-600 truncate">
+                <p className="text-gray-600">
                   {currentFolder ? currentFolder.description : "Access public folders and your department's files"}
                 </p>
               </div>
             </div>
 
-            {/* Right side - Action buttons */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:gap-4">
-              {/* Notification Bell */}
-              {renderNotificationBell()}
-
+            <div className="flex items-center space-x-4">
               {/* Selection Mode Toggle */}
               {paginatedItems.length > 0 && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={toggleSelectMode}
-                  className={`flex items-center gap-2 transition-all duration-200 h-10 ${
+                  className={`flex items-center gap-2 transition-all duration-200 ${
                     selectMode ? `${themeColors.primary} text-white` : "hover:bg-gray-50 bg-transparent"
                   }`}
                 >
                   <Check className="w-4 h-4" />
-                  <span className="hidden sm:inline">{selectMode ? "Exit Select" : "Select"}</span>
+                  {selectMode ? "Exit Select" : "Select"}
                 </Button>
               )}
 
-              {/* Refresh Button */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={fetchData}
                 disabled={loading}
-                className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 bg-transparent h-10"
+                className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 bg-transparent"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-                <span className="hidden sm:inline">Refresh</span>
+                Refresh
               </Button>
 
-              {/* Items Count Badge */}
-              <Badge
-                variant="outline"
-                className={`${themeColors.border} ${themeColors.text} px-3 py-2 h-10 flex items-center`}
-              >
-                <span className="font-medium">{filteredItems.length}</span>
-                <span className="hidden sm:inline ml-1">Items</span>
+              <Badge variant="outline" className={`${themeColors.border} ${themeColors.text} px-3 py-1`}>
+                {filteredItems.length} Items
               </Badge>
 
-              {/* New Folder Button */}
               <Button
                 variant="outline"
                 onClick={() => setShowCreateFolderModal(true)}
-                disabled={!canCreateFolder()}
-                className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 h-10"
+                className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200"
               >
                 <FolderPlus className="w-4 h-4" />
-                <span className="hidden sm:inline">New Folder</span>
+                New Folder
               </Button>
 
-              {/* Upload File Button */}
               <Button
                 onClick={() => setShowUploadModal(true)}
-                className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 h-10`}
+                className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105`}
               >
-                <Plus className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">Upload File</span>
+                <Plus className="w-4 h-4 mr-2" />
+                Upload File
               </Button>
             </div>
           </div>
@@ -1296,7 +1093,7 @@ export default function FileManagerDepartmentPage() {
         {/* Selection Actions Bar */}
         {selectMode && selectedItems.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <Badge variant="secondary" className="px-3 py-1">
                   {selectedItems.length} selected
@@ -1339,8 +1136,8 @@ export default function FileManagerDepartmentPage() {
         )}
 
         {/* Enhanced Search and Controls */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between gap-6">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <Input
@@ -1350,7 +1147,8 @@ export default function FileManagerDepartmentPage() {
                 className="pl-12 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500 rounded-xl transition-all duration-200"
               />
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+
+            <div className="flex items-center space-x-3">
               {/* Sort Options */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1360,8 +1158,7 @@ export default function FileManagerDepartmentPage() {
                     ) : (
                       <SortDesc className="w-4 h-4 mr-2" />
                     )}
-                    <span className="hidden sm:inline">Sort by {sortBy}</span>
-                    <span className="sm:hidden">Sort</span>
+                    Sort by {sortBy}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
@@ -1379,6 +1176,7 @@ export default function FileManagerDepartmentPage() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
               {/* View Toggle */}
               <div className="flex items-center bg-gray-100 rounded-xl p-1">
                 <Button
@@ -1426,7 +1224,6 @@ export default function FileManagerDepartmentPage() {
                   <Button
                     onClick={() => setShowCreateFolderModal(true)}
                     variant="outline"
-                    disabled={!canCreateFolder()}
                     className="flex items-center gap-2 h-12 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200"
                   >
                     <FolderPlus className="w-5 h-5" />
@@ -1503,9 +1300,9 @@ export default function FileManagerDepartmentPage() {
                           {isFolder ? folder!.name : file!.name}
                         </h3>
 
-                        {/* <p className="text-xs text-gray-500 mb-3">
-                          {isFolder ? `${folder!.fileCount || 0} files` : formatFileSize(file!.file.size)}
-                        </p> */}
+                        <p className="text-xs text-gray-500 mb-3">
+                          {isFolder ? `${folder!.fileCount} files` : formatFileSize(file!.file.size)}
+                        </p>
 
                         <div className="flex items-center justify-center gap-1 text-xs text-gray-400">
                           <Clock className="w-3 h-3" />
@@ -1682,6 +1479,7 @@ export default function FileManagerDepartmentPage() {
                               ? getFolderIcon(folder!.accessLevel, folder!.isDefault, folder!.isPublic)
                               : getFileIcon(file!.file.type, file!.file.name)}
                           </div>
+
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-1">
                               <h3 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">
@@ -1728,7 +1526,7 @@ export default function FileManagerDepartmentPage() {
 
                         <div className="hidden md:flex items-center space-x-8 text-sm text-gray-500">
                           <span className="w-24 text-right font-medium">
-                            {isFolder ? `${folder!.fileCount || 0} files` : formatFileSize(file!.file.size)}
+                            {isFolder ? `${folder!.fileCount} files` : formatFileSize(file!.file.size)}
                           </span>
                           <span className="w-28 truncate">{isFolder ? folder!.accessLevel : file!.category}</span>
                           <span className="w-36 truncate">
@@ -2008,7 +1806,6 @@ export default function FileManagerDepartmentPage() {
               authContext={authContext}
               themeColors={themeColors}
               currentFolder={currentFolder}
-              breadcrumb={breadcrumb}
             />
           </DialogContent>
         </Dialog>
@@ -2156,12 +1953,6 @@ export default function FileManagerDepartmentPage() {
                       Download
                     </a>
                   </Button>
-                  <Button variant="outline" asChild className="flex-1 h-12 rounded-xl bg-transparent">
-                    <a href={selectedFile.file.url} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      Open
-                    </a>
-                  </Button>
                   {selectedFile.canEdit && (
                     <Button
                       variant="outline"
@@ -2204,7 +1995,7 @@ export default function FileManagerDepartmentPage() {
                   </div>
                   <div className="p-4 bg-gray-50 rounded-xl">
                     <Label className="text-sm font-medium text-gray-600">File Count</Label>
-                    <p className="text-sm font-semibold text-gray-900 mt-1">{selectedFolder.fileCount || 0} files</p>
+                    <p className="text-sm font-semibold text-gray-900 mt-1">{selectedFolder.fileCount} files</p>
                   </div>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-xl">

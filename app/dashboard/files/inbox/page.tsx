@@ -29,14 +29,9 @@ import {
   FileVideo,
   FileAudio,
   Archive,
-  Folder,
-  Globe,
-  Lock,
-  Users,
-  ArrowRight,
+  Share,
   ChevronRight,
   Clock,
-  Share,
   ChevronLeft,
   ExternalLink,
 } from "lucide-react"
@@ -52,12 +47,6 @@ interface FileData {
   priority?: string
   status: string
   requiresSignature?: boolean
-  folder?: {
-    _id: string
-    id?: string
-    name: string
-    description?: string
-  }
   file: {
     name: string
     url: string
@@ -97,74 +86,19 @@ interface FileData {
   sharedWithMe?: boolean
 }
 
-interface FolderData {
-  _id: string
-  id?: string
-  name: string
-  description: string
-  isDefault: boolean
-  accessLevel: "public" | "department" | "private"
-  fileCount: number
-  createdBy: {
-    _id: string
-    firstName: string
-    lastName: string
-    email: string
-  }
-  departments: Array<{
-    _id: string
-    name: string
-    code: string
-  }>
-  canEdit?: boolean
-  canDelete?: boolean
-  canShare?: boolean
-  createdAt: string
-  updatedAt: string
-  sharedWith?: Array<{
-    type: string
-    userId?: {
-      _id: string
-      firstName: string
-      lastName: string
-      email: string
-    }
-    departmentId?: {
-      _id: string
-      name: string
-      code: string
-    }
-    permission: string
-    sharedAt: string
-  }>
-  sharedWithMe?: boolean
-}
-
-interface BreadcrumbItem {
-  _id: string
-  id?: string
-  name: string
-  isPublic: boolean
-  isDefault: boolean
-}
-
 type SortOption = "name" | "date" | "size" | "type" | "priority"
 type SortDirection = "asc" | "desc"
 
 const ITEMS_PER_PAGE = 30
 
-export default function InboxPage() {
+export default function SharedFilesPage() {
   const { toast } = useToast()
   const authContext = useAuth()
   const router = useRouter()
 
   // Core state
   const [files, setFiles] = useState<FileData[]>([])
-  const [folders, setFolders] = useState<FolderData[]>([])
-  const [filteredItems, setFilteredItems] = useState<(FileData | FolderData)[]>([])
-  const [currentFolder, setCurrentFolder] = useState<FolderData | null>(null)
-  const [folderFiles, setFolderFiles] = useState<FileData[]>([])
-  const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>([])
+  const [filteredItems, setFilteredItems] = useState<FileData[]>([])
 
   // UI state
   const [loading, setLoading] = useState(true)
@@ -177,16 +111,11 @@ export default function InboxPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [paginatedItems, setPaginatedItems] = useState<(FileData | FolderData)[]>([])
+  const [paginatedItems, setPaginatedItems] = useState<FileData[]>([])
 
   // Modal states
   const [showViewModal, setShowViewModal] = useState(false)
-  const [showFolderViewModal, setShowFolderViewModal] = useState(false)
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-
-  // Selected items for modals
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null)
-  const [selectedFolder, setSelectedFolder] = useState<FolderData | null>(null)
 
   // Get theme colors based on user role
   const getThemeColor = () => {
@@ -268,42 +197,21 @@ export default function InboxPage() {
     return <FileText className="w-8 h-8 text-gray-500" />
   }
 
-  // Get folder icon based on access level
-  const getFolderIcon = (accessLevel: string, isDefault = false) => {
-    if (isDefault) {
-      return <Folder className="w-8 h-8 text-blue-600" />
-    }
-    switch (accessLevel) {
-      case "public":
-        return <Globe className="w-8 h-8 text-green-600" />
-      case "private":
-        return <Lock className="w-8 h-8 text-red-600" />
-      default:
-        return <Users className="w-8 h-8 text-orange-600" />
-    }
-  }
-
-  // Fetch shared inbox files and folders
-  const fetchInboxData = async () => {
+  // Fetch shared files
+  const fetchSharedFiles = async () => {
     try {
       setLoading(true)
-      console.log("Fetching shared inbox data...")
+      console.log("Fetching shared files...")
 
-      // Fetch both shared files and folders in parallel
-      const [filesResponse, foldersResponse] = await Promise.all([
-        api.getInboxFiles(authContext),
-        api.getInboxFolders(authContext),
-      ])
-
+      const filesResponse = await api.getSharedFiles(authContext)
       console.log("Files response:", filesResponse)
-      console.log("Folders response:", foldersResponse)
 
       // Process shared files
       if (filesResponse.success && filesResponse.data) {
-        const filesData = filesResponse.data.files || []
+        const filesData = filesResponse.data || []
         const processedFiles = filesData.map((file: any) => ({
           ...file,
-          id: file.id || file._id, // Ensure both id and _id are available
+          id: file.id || file._id,
           name: file.name || file.title || "Untitled",
           title: file.title || file.name || "Untitled",
           description: file.description || "No description",
@@ -322,7 +230,6 @@ export default function InboxPage() {
             size: file.file?.size || 0,
             type: file.file?.type || "",
           },
-          folder: file.folder || null,
           departments: file.departments || [],
           signatures: file.signatures || [],
           sharedWithMe: true,
@@ -332,127 +239,39 @@ export default function InboxPage() {
       } else {
         console.warn("No shared files data received:", filesResponse)
         setFiles([])
-      }
-
-      // Process shared folders
-      if (foldersResponse.success && foldersResponse.data) {
-        const foldersData = foldersResponse.data.folders || []
-        const processedFolders = foldersData.map((folder: any) => ({
-          ...folder,
-          id: folder.id || folder._id, // Ensure both id and _id are available
-          sharedWithMe: true,
-          accessLevel: folder.accessLevel || "department",
-          fileCount: folder.fileCount || 0,
-          isDefault: folder.isDefault || false,
-          createdBy: {
-            _id: folder.createdBy?._id || "",
-            firstName: folder.createdBy?.firstName || "Unknown",
-            lastName: folder.createdBy?.lastName || "User",
-            email: folder.createdBy?.email || "",
-          },
-          departments: folder.departments || [],
-        }))
-        console.log("Processed shared folders:", processedFolders.length)
-        setFolders(processedFolders)
-      } else {
-        console.warn("No shared folders data received:", foldersResponse)
-        setFolders([])
+        toast({
+          title: "No shared files",
+          description: "You don't have any shared files yet",
+          variant: "default",
+        })
       }
     } catch (error) {
-      console.error("Error fetching shared inbox data:", error)
+      console.error("Error fetching shared files:", error)
       toast({
         title: "Error",
-        description: "Failed to load shared inbox data",
+        description: "Failed to load shared files",
         variant: "destructive",
       })
       setFiles([])
-      setFolders([])
     } finally {
       setLoading(false)
-    }
-  }
-
-  // Fetch folder contents when opening a shared folder
-  const fetchFolderContents = async (folderId: string) => {
-    try {
-      setLoading(true)
-      console.log("Fetching folder contents for:", folderId)
-
-      const response = await api.getFolder(folderId, authContext)
-      console.log("Folder contents response:", response)
-
-      if (response.success && response.data) {
-        const folderData = response.data.folder
-        const folderFiles = folderData.files || []
-
-        // Process files in the folder
-        const processedFiles = folderFiles.map((file: any) => ({
-          ...file,
-          id: file.id || file._id,
-          name: file.name || file.title || "Untitled",
-          title: file.title || file.name || "Untitled",
-          description: file.description || "No description",
-          category: file.category || "Uncategorized",
-          status: file.status || "active",
-          priority: file.priority || "medium",
-          sharedWithMe: true,
-        }))
-
-        setFolderFiles(processedFiles)
-
-        // Fetch breadcrumb for navigation
-        await fetchBreadcrumb(folderId)
-      }
-    } catch (error) {
-      console.error("Error fetching folder contents:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load folder contents",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Fetch breadcrumb path
-  const fetchBreadcrumb = async (folderId: string) => {
-    try {
-      const response = await api.getFolderBreadcrumb(folderId, authContext)
-      if (response.success && response.data) {
-        const breadcrumbData = response.data.breadcrumb || []
-        setBreadcrumb(
-          breadcrumbData.map((item: any) => ({
-            ...item,
-            id: item.id || item._id,
-          })),
-        )
-      }
-    } catch (error) {
-      console.error("Error fetching breadcrumb:", error)
     }
   }
 
   useEffect(() => {
     if (authContext.isAuthenticated) {
-      fetchInboxData()
+      fetchSharedFiles()
     }
   }, [authContext])
 
   // Search, sort, and paginate items
   useEffect(() => {
-    console.log("Filtering items. Current folder:", currentFolder?.name)
-    console.log("Available files:", files.length)
-    console.log("Available folders:", folders.length)
-    console.log("Folder files:", folderFiles.length)
+    console.log("Filtering files. Available files:", files.length)
 
-    // Use folder files if viewing a specific folder, otherwise use all shared items
-    const itemsToFilter = currentFolder ? folderFiles : [...files, ...folders]
-
-    const filtered = itemsToFilter.filter((item) => {
-      const name = "name" in item ? item.name : item.title || ""
-      const description = item.description || ""
-      const createdBy = item.createdBy ? `${item.createdBy.firstName} ${item.createdBy.lastName}` : ""
+    const filtered = files.filter((file) => {
+      const name = file.name || ""
+      const description = file.description || ""
+      const createdBy = file.createdBy ? `${file.createdBy.firstName} ${file.createdBy.lastName}` : ""
 
       return (
         name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -461,39 +280,31 @@ export default function InboxPage() {
       )
     })
 
-    // Sort items (folders first when not in a specific folder)
+    // Sort files
     filtered.sort((a, b) => {
-      // Show folders first only when not viewing a specific folder
-      if (!currentFolder) {
-        const aIsFolder = !("file" in a)
-        const bIsFolder = !("file" in b)
-        if (aIsFolder && !bIsFolder) return -1
-        if (!aIsFolder && bIsFolder) return 1
-      }
-
       let aValue: any, bValue: any
 
       switch (sortBy) {
         case "name":
-          aValue = ("name" in a ? a.name : a.title || "").toLowerCase()
-          bValue = ("name" in b ? b.name : b.title || "").toLowerCase()
+          aValue = a.name.toLowerCase()
+          bValue = b.name.toLowerCase()
           break
         case "date":
           aValue = new Date(a.createdAt)
           bValue = new Date(b.createdAt)
           break
         case "size":
-          aValue = "file" in a ? a.file.size : 0
-          bValue = "file" in b ? b.file.size : 0
+          aValue = a.file.size
+          bValue = b.file.size
           break
         case "type":
-          aValue = "file" in a ? a.file.type.toLowerCase() : "folder"
-          bValue = "file" in b ? b.file.type.toLowerCase() : "folder"
+          aValue = a.file.type.toLowerCase()
+          bValue = b.file.type.toLowerCase()
           break
         case "priority":
           const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 }
-          aValue = "priority" in a ? priorityOrder[a.priority as keyof typeof priorityOrder] || 0 : 0
-          bValue = "priority" in b ? priorityOrder[b.priority as keyof typeof priorityOrder] || 0 : 0
+          aValue = priorityOrder[a.priority as keyof typeof priorityOrder] || 0
+          bValue = priorityOrder[b.priority as keyof typeof priorityOrder] || 0
           break
         default:
           return 0
@@ -506,7 +317,7 @@ export default function InboxPage() {
       }
     })
 
-    console.log("Filtered items:", filtered.length)
+    console.log("Filtered files:", filtered.length)
     setFilteredItems(filtered)
 
     // Calculate pagination
@@ -524,36 +335,9 @@ export default function InboxPage() {
     const endIndex = startIndex + ITEMS_PER_PAGE
     const paginatedResult = filtered.slice(startIndex, endIndex)
 
-    console.log("Paginated items:", paginatedResult.length)
+    console.log("Paginated files:", paginatedResult.length)
     setPaginatedItems(paginatedResult)
-  }, [files, folders, folderFiles, currentFolder, searchTerm, sortBy, sortDirection, currentPage])
-
-  // Navigation functions
-  const navigateToFolder = async (folder: FolderData) => {
-    console.log("Navigating to shared folder:", folder.name, folder.id || folder._id)
-    setCurrentFolder(folder)
-    setCurrentPage(1)
-    await fetchFolderContents(folder.id || folder._id)
-  }
-
-  const navigateBack = () => {
-    console.log("Going back to shared inbox")
-    setCurrentFolder(null)
-    setFolderFiles([])
-    setBreadcrumb([])
-    setCurrentPage(1)
-  }
-
-  const navigateToBreadcrumb = async (item: BreadcrumbItem, index: number) => {
-    if (index === 0) {
-      navigateBack()
-    } else {
-      const folder = folders.find((f) => (f.id || f._id) === (item.id || item._id))
-      if (folder) {
-        await navigateToFolder(folder)
-      }
-    }
-  }
+  }, [files, searchTerm, sortBy, sortDirection, currentPage])
 
   // Utility functions
   const formatFileSize = (bytes: number) => {
@@ -561,7 +345,7 @@ export default function InboxPage() {
     const k = 1024
     const sizes = ["Bytes", "KB", "MB", "GB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
   }
 
   const formatDate = (dateString: string) => {
@@ -622,16 +406,9 @@ export default function InboxPage() {
   }
 
   // Modal handlers
-  const openViewModal = (item: FileData | FolderData) => {
-    if ("file" in item) {
-      setSelectedFile(item)
-      setSelectedFolder(null)
-      setShowViewModal(true)
-    } else {
-      setSelectedFolder(item)
-      setSelectedFile(null)
-      setShowFolderViewModal(true)
-    }
+  const openViewModal = (file: FileData) => {
+    setSelectedFile(file)
+    setShowViewModal(true)
   }
 
   const handleDownload = async (file: FileData) => {
@@ -686,60 +463,24 @@ export default function InboxPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="space-y-8 p-8">
-        {/* Enhanced Header with Breadcrumb */}
+        {/* Header */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              {/* Enhanced Breadcrumb Navigation */}
-              <div className="flex items-center gap-2 text-sm">
-                <Inbox className="w-4 h-4 text-gray-500" />
-                <button
-                  onClick={navigateBack}
-                  className="hover:text-blue-600 transition-colors flex items-center gap-1 text-gray-600 hover:bg-blue-50 px-2 py-1 rounded-lg"
-                >
-                  Shared Inbox
-                </button>
-                {breadcrumb.map((item, index) => (
-                  <div key={item.id || item._id} className="flex items-center gap-2">
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
-                    <button
-                      onClick={() => navigateToBreadcrumb(item, index)}
-                      className={`hover:text-blue-600 transition-colors px-2 py-1 rounded-lg ${
-                        index === breadcrumb.length - 1
-                          ? `font-medium ${themeColors.text} bg-blue-50`
-                          : "text-gray-600 hover:bg-blue-50"
-                      }`}
-                    >
-                      {item.name}
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                  {currentFolder ? currentFolder.name : "Shared Inbox"}
-                </h1>
-                <p className="text-gray-600">
-                  {currentFolder
-                    ? `Files in ${currentFolder.name} folder`
-                    : "Files and folders shared with you and your department"}
-                </p>
-                {authContext.user?.role && (
-                  <Badge className={`mt-2 ${themeColors.badge} ${themeColors.badgeText}`}>
-                    {authContext.user.role.toUpperCase()} INBOX
-                  </Badge>
-                )}
-              </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Shared Files</h1>
+              <p className="text-gray-600">Files that have been shared with you</p>
+              {authContext.user?.role && (
+                <Badge className={`mt-2 ${themeColors.badge} ${themeColors.badgeText}`}>
+                  {authContext.user.role.toUpperCase()} SHARED FILES
+                </Badge>
+              )}
             </div>
 
             <div className="flex items-center space-x-4">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={
-                  currentFolder ? () => fetchFolderContents(currentFolder.id || currentFolder._id) : fetchInboxData
-                }
+                onClick={fetchSharedFiles}
                 disabled={loading}
                 className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 bg-transparent"
               >
@@ -748,19 +489,19 @@ export default function InboxPage() {
               </Button>
 
               <Badge variant="outline" className={`${themeColors.border} ${themeColors.text} px-3 py-1`}>
-                {filteredItems.length} Items
+                {filteredItems.length} Files
               </Badge>
             </div>
           </div>
         </div>
 
-        {/* Enhanced Search and Controls */}
+        {/* Search and Controls */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between gap-6">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <Input
-                placeholder={currentFolder ? "Search folder contents..." : "Search shared items..."}
+                placeholder="Search shared files..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-12 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500 rounded-xl transition-all duration-200"
@@ -823,7 +564,7 @@ export default function InboxPage() {
           </div>
         </div>
 
-        {/* Items Display */}
+        {/* Files Display */}
         {paginatedItems.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
             <div className="p-16 text-center">
@@ -831,14 +572,12 @@ export default function InboxPage() {
                 <Inbox className={`w-10 h-10 ${themeColors.text}`} />
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                {searchTerm ? "No items found" : currentFolder ? "Folder is empty" : "No shared items yet"}
+                {searchTerm ? "No files found" : "No shared files yet"}
               </h3>
               <p className="text-gray-600 mb-8 max-w-md mx-auto">
                 {searchTerm
-                  ? "Try adjusting your search terms or browse through folders"
-                  : currentFolder
-                    ? "This shared folder doesn't contain any files yet"
-                    : "No files or folders have been shared with you yet"}
+                  ? "Try adjusting your search terms"
+                  : "No files have been shared with you yet"}
               </p>
             </div>
           </div>
@@ -847,130 +586,87 @@ export default function InboxPage() {
             {/* Grid View */}
             {viewMode === "grid" && (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
-                {paginatedItems.map((item) => {
-                  const isFolder = !("file" in item)
-                  const folder = isFolder ? (item as FolderData) : null
-                  const file = !isFolder ? (item as FileData) : null
-
-                  return (
-                    <Card
-                      key={item.id || item._id}
-                      className="group relative cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-0 shadow-md bg-white rounded-2xl overflow-hidden"
-                      onClick={() => {
-                        if (isFolder && !currentFolder) {
-                          navigateToFolder(folder!)
-                        } else {
-                          openViewModal(item)
-                        }
-                      }}
-                    >
-                      <CardContent className="p-6 text-center">
-                        <div className="mb-4 flex justify-center">
-                          <div className="p-3 rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
-                            {isFolder
-                              ? getFolderIcon(folder!.accessLevel, folder!.isDefault)
-                              : getFileIcon(file!.file.type, file!.file.name)}
-                          </div>
+                {paginatedItems.map((file) => (
+                  <Card
+                    key={file.id || file._id}
+                    className="group relative cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-0 shadow-md bg-white rounded-2xl overflow-hidden"
+                    onClick={() => openViewModal(file)}
+                  >
+                    <CardContent className="p-6 text-center">
+                      <div className="mb-4 flex justify-center">
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
+                          {getFileIcon(file.file.type, file.file.name)}
                         </div>
+                      </div>
 
-                        <h3
-                          className="font-semibold text-sm text-gray-900 truncate mb-2 group-hover:text-blue-600 transition-colors duration-200"
-                          title={isFolder ? folder!.name : file!.name}
-                        >
-                          {isFolder ? folder!.name : file!.name}
-                        </h3>
+                      <h3
+                        className="font-semibold text-sm text-gray-900 truncate mb-2 group-hover:text-blue-600 transition-colors duration-200"
+                        title={file.name}
+                      >
+                        {file.name}
+                      </h3>
 
-                        <p className="text-xs text-gray-500 mb-3">
-                          {isFolder ? `${folder!.fileCount} files` : formatFileSize(file!.file.size)}
-                        </p>
+                      <p className="text-xs text-gray-500 mb-3">
+                        {formatFileSize(file.file.size)}
+                      </p>
 
-                        <div className="flex items-center justify-center gap-1 text-xs text-gray-400">
-                          <Clock className="w-3 h-3" />
-                          {formatDate(item.createdAt)}
-                        </div>
+                      <div className="flex items-center justify-center gap-1 text-xs text-gray-400">
+                        <Clock className="w-3 h-3" />
+                        {formatDate(file.createdAt)}
+                      </div>
 
-                        {/* Action Menu */}
-                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 bg-white/90 backdrop-blur-sm shadow-lg hover:bg-white rounded-xl"
-                              >
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuItem onClick={() => openViewModal(item)}>
-                                <Eye className="w-4 h-4 mr-2" />
-                                View Details
-                              </DropdownMenuItem>
-                              {isFolder && !currentFolder ? (
-                                <DropdownMenuItem onClick={() => navigateToFolder(folder!)}>
-                                  <ArrowRight className="w-4 h-4 mr-2" />
-                                  Open Folder
-                                </DropdownMenuItem>
-                              ) : (
-                                !isFolder && (
-                                  <DropdownMenuItem onClick={() => handleDownload(file!)}>
-                                    <Download className="w-4 h-4 mr-2" />
-                                    Download
-                                  </DropdownMenuItem>
-                                )
-                              )}
-                              {!isFolder && (
-                                <DropdownMenuItem asChild>
-                                  <a href={file!.file.url} target="_blank" rel="noopener noreferrer">
-                                    <ExternalLink className="w-4 h-4 mr-2" />
-                                    Open in New Tab
-                                  </a>
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                      {/* Action Menu */}
+                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 bg-white/90 backdrop-blur-sm shadow-lg hover:bg-white rounded-xl"
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={() => openViewModal(file)}>
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDownload(file)}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Download
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <a href={file.file.url} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="w-4 h-4 mr-2" />
+                                Open in New Tab
+                              </a>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
 
-                        {/* Status Indicators */}
-                        <div className="absolute top-3 left-3 flex flex-col gap-1">
-                          <Badge variant="secondary" className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-lg">
-                            <Share className="w-2 h-2 mr-1" />
-                            Shared
+                      {/* Status Indicators */}
+                      <div className="absolute top-3 left-3 flex flex-col gap-1">
+                        <Badge variant="secondary" className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-lg">
+                          <Share className="w-2 h-2 mr-1" />
+                          Shared
+                        </Badge>
+                        {file.requiresSignature && (
+                          <Badge
+                            variant="secondary"
+                            className={`text-xs px-2 py-1 rounded-lg ${
+                              hasUserSigned(file) ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
+                            }`}
+                          >
+                            <PenTool className="w-2 h-2 mr-1" />
+                            {hasUserSigned(file) ? "Signed" : "Sign"}
                           </Badge>
-                          {!isFolder && file!.requiresSignature && (
-                            <Badge
-                              variant="secondary"
-                              className={`text-xs px-2 py-1 rounded-lg ${
-                                hasUserSigned(file!) ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
-                              }`}
-                            >
-                              <PenTool className="w-2 h-2 mr-1" />
-                              {hasUserSigned(file!) ? "Signed" : "Sign"}
-                            </Badge>
-                          )}
-                          {isFolder && (
-                            <Badge
-                              variant="secondary"
-                              className={`text-xs px-2 py-1 rounded-lg ${
-                                folder!.accessLevel === "public"
-                                  ? "bg-green-100 text-green-700"
-                                  : folder!.accessLevel === "private"
-                                    ? "bg-red-100 text-red-700"
-                                    : "bg-orange-100 text-orange-700"
-                              }`}
-                            >
-                              {folder!.accessLevel === "public"
-                                ? "Public"
-                                : folder!.accessLevel === "private"
-                                  ? "Private"
-                                  : "Department"}
-                            </Badge>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             )}
 
@@ -978,131 +674,88 @@ export default function InboxPage() {
             {viewMode === "list" && (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="divide-y divide-gray-100">
-                  {paginatedItems.map((item) => {
-                    const isFolder = !("file" in item)
-                    const folder = isFolder ? (item as FolderData) : null
-                    const file = !isFolder ? (item as FileData) : null
+                  {paginatedItems.map((file) => (
+                    <div
+                      key={file.id || file._id}
+                      className="flex items-center p-6 hover:bg-gray-50 cursor-pointer group transition-all duration-200"
+                      onClick={() => openViewModal(file)}
+                    >
+                      <div className="flex items-center flex-1 min-w-0">
+                        <div className="mr-4 p-2 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
+                          {getFileIcon(file.file.type, file.file.name)}
+                        </div>
 
-                    return (
-                      <div
-                        key={item.id || item._id}
-                        className="flex items-center p-6 hover:bg-gray-50 cursor-pointer group transition-all duration-200"
-                        onClick={() => {
-                          if (isFolder && !currentFolder) {
-                            navigateToFolder(folder!)
-                          } else {
-                            openViewModal(item)
-                          }
-                        }}
-                      >
-                        <div className="flex items-center flex-1 min-w-0">
-                          <div className="mr-4 p-2 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
-                            {isFolder
-                              ? getFolderIcon(folder!.accessLevel, folder!.isDefault)
-                              : getFileIcon(file!.file.type, file!.file.name)}
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-3 mb-1">
-                              <h3 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">
-                                {isFolder ? folder!.name : file!.name}
-                              </h3>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-1">
+                            <h3 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">
+                              {file.name}
+                            </h3>
+                            <Badge
+                              variant="secondary"
+                              className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-lg"
+                            >
+                              <Share className="w-2 h-2 mr-1" />
+                              Shared
+                            </Badge>
+                            {file.requiresSignature && (
                               <Badge
                                 variant="secondary"
-                                className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-lg"
+                                className={`text-xs px-2 py-1 rounded-lg ${
+                                  hasUserSigned(file)
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-orange-100 text-orange-800"
+                                }`}
                               >
-                                <Share className="w-2 h-2 mr-1" />
-                                Shared
+                                <PenTool className="w-2 h-2 mr-1" />
+                                {hasUserSigned(file) ? "Signed" : "Sign"}
                               </Badge>
-                              {!isFolder && file!.requiresSignature && (
-                                <Badge
-                                  variant="secondary"
-                                  className={`text-xs px-2 py-1 rounded-lg ${
-                                    hasUserSigned(file!)
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-orange-100 text-orange-800"
-                                  }`}
-                                >
-                                  <PenTool className="w-2 h-2 mr-1" />
-                                  {hasUserSigned(file!) ? "Signed" : "Sign"}
-                                </Badge>
-                              )}
-                              {isFolder && (
-                                <Badge
-                                  variant="secondary"
-                                  className={`text-xs px-2 py-1 rounded-lg ${
-                                    folder!.accessLevel === "public"
-                                      ? "bg-green-100 text-green-700"
-                                      : folder!.accessLevel === "private"
-                                        ? "bg-red-100 text-red-700"
-                                        : "bg-orange-100 text-orange-700"
-                                  }`}
-                                >
-                                  {folder!.accessLevel === "public"
-                                    ? "Public"
-                                    : folder!.accessLevel === "private"
-                                      ? "Private"
-                                      : "Department"}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-500 truncate">{item.description}</p>
+                            )}
                           </div>
-                        </div>
-
-                        <div className="hidden md:flex items-center space-x-6 text-sm text-gray-500">
-                          <span className="w-24 text-right font-medium">
-                            {isFolder ? `${folder!.fileCount} files` : formatFileSize(file!.file.size)}
-                          </span>
-                          <span className="w-28 truncate">{isFolder ? folder!.accessLevel : file!.category}</span>
-                          <span className="w-36 truncate">
-                            {item.createdBy ? `${item.createdBy.firstName} ${item.createdBy.lastName}` : "System"}
-                          </span>
-                          <span className="w-28 flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {formatDate(item.createdAt)}
-                          </span>
-                        </div>
-
-                        <div className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-xl hover:bg-gray-200">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuItem onClick={() => openViewModal(item)}>
-                                <Eye className="w-4 h-4 mr-2" />
-                                View Details
-                              </DropdownMenuItem>
-                              {isFolder && !currentFolder ? (
-                                <DropdownMenuItem onClick={() => navigateToFolder(folder!)}>
-                                  <ArrowRight className="w-4 h-4 mr-2" />
-                                  Open Folder
-                                </DropdownMenuItem>
-                              ) : (
-                                !isFolder && (
-                                  <DropdownMenuItem onClick={() => handleDownload(file!)}>
-                                    <Download className="w-4 h-4 mr-2" />
-                                    Download
-                                  </DropdownMenuItem>
-                                )
-                              )}
-                              {!isFolder && (
-                                <DropdownMenuItem asChild>
-                                  <a href={file!.file.url} target="_blank" rel="noopener noreferrer">
-                                    <ExternalLink className="w-4 h-4 mr-2" />
-                                    Open in New Tab
-                                  </a>
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <p className="text-sm text-gray-500 truncate">{file.description}</p>
                         </div>
                       </div>
-                    )
-                  })}
+
+                      <div className="hidden md:flex items-center space-x-6 text-sm text-gray-500">
+                        <span className="w-24 text-right font-medium">
+                          {formatFileSize(file.file.size)}
+                        </span>
+                        <span className="w-28 truncate">{file.category}</span>
+                        <span className="w-36 truncate">
+                          {file.createdBy ? `${file.createdBy.firstName} ${file.createdBy.lastName}` : "System"}
+                        </span>
+                        <span className="w-28 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatDate(file.createdAt)}
+                        </span>
+                      </div>
+
+                      <div className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-xl hover:bg-gray-200">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={() => openViewModal(file)}>
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDownload(file)}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Download
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <a href={file.file.url} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="w-4 h-4 mr-2" />
+                                Open in New Tab
+                              </a>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -1113,7 +766,7 @@ export default function InboxPage() {
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-gray-600">
                     Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
-                    {Math.min(currentPage * ITEMS_PER_PAGE, filteredItems.length)} of {filteredItems.length} items
+                    {Math.min(currentPage * ITEMS_PER_PAGE, filteredItems.length)} of {filteredItems.length} files
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -1224,15 +877,6 @@ export default function InboxPage() {
                     <p className="text-sm text-gray-900 mt-1">{new Date(selectedFile.createdAt).toLocaleString()}</p>
                   </div>
                 </div>
-                {selectedFile.folder && (
-                  <div className="p-4 bg-gray-50 rounded-xl">
-                    <Label className="text-sm font-medium text-gray-600">Folder</Label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Folder className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm text-gray-900">{selectedFile.folder.name}</span>
-                    </div>
-                  </div>
-                )}
                 <div className="p-4 bg-gray-50 rounded-xl">
                   <Label className="text-sm font-medium text-gray-600">Departments</Label>
                   <div className="flex flex-wrap gap-2 mt-1">
@@ -1258,87 +902,6 @@ export default function InboxPage() {
                       <ExternalLink className="w-4 h-4 mr-2" />
                       Open in New Tab
                     </a>
-                  </Button>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-
-        {/* View Folder Modal */}
-        <Dialog open={showFolderViewModal} onOpenChange={setShowFolderViewModal}>
-          <DialogContent className="max-w-2xl rounded-2xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
-                {selectedFolder && (
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100">
-                    {getFolderIcon(selectedFolder.accessLevel, selectedFolder.isDefault)}
-                  </div>
-                )}
-                {selectedFolder?.name}
-              </DialogTitle>
-              <DialogDescription>Shared folder details and information</DialogDescription>
-            </DialogHeader>
-            {selectedFolder && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-gray-50 rounded-xl">
-                    <Label className="text-sm font-medium text-gray-600">Folder Name</Label>
-                    <p className="text-sm font-semibold text-gray-900 mt-1">{selectedFolder.name}</p>
-                  </div>
-                  <div className="p-4 bg-gray-50 rounded-xl">
-                    <Label className="text-sm font-medium text-gray-600">File Count</Label>
-                    <p className="text-sm font-semibold text-gray-900 mt-1">{selectedFolder.fileCount} files</p>
-                  </div>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-xl">
-                  <Label className="text-sm font-medium text-gray-600">Description</Label>
-                  <p className="text-sm text-gray-900 mt-1">{selectedFolder.description}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-gray-50 rounded-xl">
-                    <Label className="text-sm font-medium text-gray-600">Access Level</Label>
-                    <div className="flex items-center gap-2 mt-1">
-                      {selectedFolder.accessLevel === "public" && <Globe className="w-4 h-4 text-green-600" />}
-                      {selectedFolder.accessLevel === "private" && <Lock className="w-4 h-4 text-red-600" />}
-                      {selectedFolder.accessLevel === "department" && <Users className="w-4 h-4 text-orange-600" />}
-                      <span className="text-sm text-gray-900 capitalize">{selectedFolder.accessLevel}</span>
-                    </div>
-                  </div>
-                  <div className="p-4 bg-gray-50 rounded-xl">
-                    <Label className="text-sm font-medium text-gray-600">Shared Date</Label>
-                    <p className="text-sm text-gray-900 mt-1">{new Date(selectedFolder.createdAt).toLocaleString()}</p>
-                  </div>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-xl">
-                  <Label className="text-sm font-medium text-gray-600">Shared By</Label>
-                  <p className="text-sm text-gray-900 mt-1">
-                    {selectedFolder.createdBy.firstName} {selectedFolder.createdBy.lastName}
-                  </p>
-                  <p className="text-xs text-gray-500">{selectedFolder.createdBy.email}</p>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-xl">
-                  <Label className="text-sm font-medium text-gray-600">Departments</Label>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {selectedFolder.departments.map((dept) => (
-                      <Badge key={dept._id} variant="outline" className="text-xs rounded-lg">
-                        <Building2 className="w-3 h-3 mr-1" />
-                        {dept.name}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex gap-3 pt-4">
-                  <Button
-                    variant="outline"
-                    className="flex-1 h-12 rounded-xl bg-transparent"
-                    onClick={() => {
-                      setShowFolderViewModal(false)
-                      navigateToFolder(selectedFolder)
-                    }}
-                  >
-                    <ArrowRight className="w-4 h-4 mr-2" />
-                    Open Folder
                   </Button>
                 </div>
               </div>

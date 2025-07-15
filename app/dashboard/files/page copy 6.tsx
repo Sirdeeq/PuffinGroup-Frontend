@@ -1,12 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Input,  } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   AlertDialog,
@@ -25,27 +23,15 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/AuthContext"
 import { useToast } from "@/hooks/use-toast"
 import { api } from "@/utils/api"
 import {
   FileText,
   Share,
-  Search,
-  Download,
-  Calendar,
   Loader2,
-  Eye,
-  Edit,
-  Trash2,
-  MoreHorizontal,
-  Grid3X3,
-  List,
   ImageIcon,
   RefreshCw,
-  SortAsc,
-  SortDesc,
   FileSpreadsheet,
   FileVideo,
   FileAudio,
@@ -64,14 +50,19 @@ import {
   Lock,
   FolderPlus,
   Zap,
+  Search,
   Bell,
   ChevronRight,
   Home,
   ArrowLeft,
+  SortDesc,
+  Grid3X3,
+  List,
 } from "lucide-react"
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
 import { redirect } from "next/navigation"
-import { FileUploadModal } from "@/components/file-upload-modal"
-import { FolderForm } from "@/components/folder-form"
 
 interface FileData {
   _id: string
@@ -134,6 +125,10 @@ interface FolderData {
     name: string
     code: string
   }>
+  parentFolder?: {
+    _id: string
+    name: string
+  } | null
   canEdit?: boolean
   canDelete?: boolean
   canShare?: boolean
@@ -141,19 +136,6 @@ interface FolderData {
   canCreateSubfolder?: boolean
   createdAt: string
   updatedAt: string
-  parentFolder?: {
-    _id: string
-    name: string
-    description?: string
-    createdBy?: string
-    isPublic?: boolean
-    isDefault?: boolean
-    isShared?: boolean
-    departments?: Array<any>
-    accessLevel?: string
-    createdAt?: string
-    updatedAt?: string
-  } | null
 }
 
 interface NotificationData {
@@ -237,7 +219,7 @@ export default function AdminFilesPage() {
   const fetchNotifications = async () => {
     try {
       const response = await api.getNotifications(authContext)
-      if (response.success && Array.isArray(response.data)) {
+      if (response.success) {
         setNotifications(response.data)
         setUnreadNotifications(response.data.filter((n: NotificationData) => !n.isRead).length)
       }
@@ -289,37 +271,24 @@ export default function AdminFilesPage() {
 
       // Fetch files with includeAll parameter for admin
       const filesResponse = await api.getFilesForAdmin(authContext)
-      if (filesResponse.success && Array.isArray(filesResponse.data)) {
+      if (filesResponse.success) {
         setAllFiles(filesResponse.data)
         setFilteredFiles(filesResponse.data)
-      } else {
-        console.error("Files fetch failed:", filesResponse)
-        setAllFiles([])
-        setFilteredFiles([])
       }
 
       // Fetch folders with includeAll parameter for admin
       const foldersResponse = await api.getFolders({ includeAll: true }, authContext)
       if (foldersResponse.success) {
-        console.log("Folders response:", foldersResponse)
-
-        // Ensure we have an array of folders
-        const foldersData = Array.isArray(foldersResponse.data.data) ? foldersResponse.data.data : []
-        setAllFolders(foldersData)
-
-        // Check if folder structure is initialized
-        const hasDefaultPublicFolder = foldersData.some((folder: FolderData) => folder.isDefault && folder.isPublic)
+        setAllFolders(foldersResponse.data)
+        const hasDefaultPublicFolder = foldersResponse.data.some(
+          (folder: FolderData) => folder.isDefault && folder.isPublic,
+        )
         setFolderStructureInitialized(hasDefaultPublicFolder)
-      } else {
-        console.error("Folders fetch failed:", foldersResponse)
-        setAllFolders([])
-        setFolderStructureInitialized(false)
       }
 
       // Fetch notifications
       await fetchNotifications()
     } catch (error: any) {
-      console.error("Error in fetchAllData:", error)
       toast({
         title: "Error",
         description: "Failed to load data. Please try again.",
@@ -328,7 +297,6 @@ export default function AdminFilesPage() {
       setAllFiles([])
       setAllFolders([])
       setFilteredFiles([])
-      setFolderStructureInitialized(false)
     } finally {
       setLoading(false)
     }
@@ -400,135 +368,12 @@ export default function AdminFilesPage() {
     setFilteredFiles(filtered)
   }, [allFiles, searchTerm, filterStatus, sortBy, sortDirection])
 
-  const handleDeleteFile = async () => {
-    if (!selectedFile) return
-    try {
-      setIsProcessing(true)
-      const response = await api.deleteFile(selectedFile._id, authContext)
-      if (response.success) {
-        setAllFiles((prev) => prev.filter((file) => file._id !== selectedFile._id))
-        setShowDeleteDialog(false)
-        setSelectedFile(null)
-        toast({
-          title: "Success",
-          description: "File deleted successfully",
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete file",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleDeleteFolder = async () => {
-    if (!selectedFolder) return
-    try {
-      setIsProcessing(true)
-      const response = await api.deleteFolder(selectedFolder._id, authContext)
-      if (response.success) {
-        setAllFolders((prev) => prev.filter((folder) => folder._id !== selectedFolder._id))
-        setShowDeleteDialog(false)
-        setSelectedFolder(null)
-        toast({
-          title: "Success",
-          description: "Folder deleted successfully",
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete folder",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleCreateFolder = async (data: any) => {
-    try {
-      setIsProcessing(true)
-      const response = await api.createFolder(data, authContext)
-      if (response.success) {
-        setAllFolders((prev) => [...prev, response.data])
-        setShowFolderForm(false)
-        toast({
-          title: "Success",
-          description: "Folder created successfully",
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create folder",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleUpdateFolder = async (data: any) => {
-    if (!selectedFolder) return
-    try {
-      setIsProcessing(true)
-      const response = await api.updateFolder(selectedFolder._id, data, authContext)
-      if (response.success) {
-        setAllFolders((prev) => prev.map((folder) => (folder._id === selectedFolder._id ? response.data : folder)))
-        setShowFolderForm(false)
-        setSelectedFolder(null)
-        toast({
-          title: "Success",
-          description: "Folder updated successfully",
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update folder",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleFileUpload = async (formData: FormData) => {
-    try {
-      setIsProcessing(true)
-      const response = await api.createFile(formData, authContext)
-      if (response.success) {
-        setAllFiles((prev) => [...prev, response.data])
-        setShowUploadModal(false)
-        toast({
-          title: "Success",
-          description: "File uploaded successfully",
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to upload file",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
   // Get current folder's subfolders and files
   const getCurrentFolderContents = () => {
     const subfolders = allFolders.filter((folder) => {
       if (currentFolderId === null) {
-        // Root level - show folders with no parent or null parent
-        return !folder.parentFolder || folder.parentFolder === null
+        return folder.parentFolder === null || folder.parentFolder === undefined
       }
-      // Show folders whose parent matches current folder
       return folder.parentFolder?._id === currentFolderId
     })
 
@@ -705,31 +550,6 @@ export default function AdminFilesPage() {
     }
   }
 
-  const openViewModal = (file: FileData) => {
-    setSelectedFile(file)
-    setShowViewModal(true)
-  }
-
-  const openEditModal = (file: FileData) => {
-    setSelectedFile(file)
-    setShowEditModal(true)
-  }
-
-  const openDeleteDialog = (file: FileData) => {
-    setSelectedFile(file)
-    setShowDeleteDialog(true)
-  }
-
-  const openShareModal = (file: FileData) => {
-    setSelectedFile(file)
-    setShowShareModal(true)
-  }
-
-  const openFolderForm = (folder?: FolderData) => {
-    setSelectedFolder(folder || null)
-    setShowFolderForm(true)
-  }
-
   const refreshData = () => {
     fetchAllData()
   }
@@ -758,8 +578,8 @@ export default function AdminFilesPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="space-y-6 p-4 md:p-8">
-        {/* Enhanced Admin Header - Responsive */}
+      <div className="space-y-8 p-8">
+        {/* Enhanced Admin Header */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-8">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
@@ -901,7 +721,7 @@ export default function AdminFilesPage() {
           </div>
         </div>
 
-        {/* Enhanced Admin Stats Dashboard - Responsive Grid */}
+        {/* Enhanced Admin Stats Dashboard */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
           {/* File Stats */}
           <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md bg-gradient-to-br from-blue-50 to-blue-100">
@@ -995,7 +815,6 @@ export default function AdminFilesPage() {
           </Card>
         </div>
 
-        {/* Folder Structure Status Card */}
         {!folderStructureInitialized && (
           <Card className="border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50">
             <CardContent className="p-4 md:p-6">
@@ -1052,8 +871,8 @@ export default function AdminFilesPage() {
 
         {/* Enhanced Search and Controls */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="relative flex-1 max-w-2xl w-full">
+          <div className="flex items-center justify-between gap-6">
+            <div className="relative flex-1 max-w-2xl">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <Input
                 placeholder="Search across all files, creators, categories, and descriptions..."
@@ -1062,7 +881,8 @@ export default function AdminFilesPage() {
                 className="pl-12 h-12 border-gray-200 focus:border-orange-500 focus:ring-orange-500 rounded-xl transition-all duration-200 text-base"
               />
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+
+            <div className="flex items-center space-x-3">
               {/* Sort Options */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1097,9 +917,8 @@ export default function AdminFilesPage() {
                   variant={viewMode === "card" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("card")}
-                  className={`h-10 px-4 rounded-lg transition-all duration-200 ${
-                    viewMode === "card" ? themeColors.primary : "hover:bg-gray-200"
-                  }`}
+                  className={`h-10 px-4 rounded-lg transition-all duration-200 ${viewMode === "card" ? themeColors.primary : "hover:bg-gray-200"
+                    }`}
                 >
                   <Grid3X3 className="w-4 h-4" />
                 </Button>
@@ -1107,9 +926,8 @@ export default function AdminFilesPage() {
                   variant={viewMode === "table" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("table")}
-                  className={`h-10 px-4 rounded-lg transition-all duration-200 ${
-                    viewMode === "table" ? themeColors.primary : "hover:bg-gray-200"
-                  }`}
+                  className={`h-10 px-4 rounded-lg transition-all duration-200 ${viewMode === "table" ? themeColors.primary : "hover:bg-gray-200"
+                    }`}
                 >
                   <List className="w-4 h-4" />
                 </Button>
@@ -1125,7 +943,11 @@ export default function AdminFilesPage() {
               </Button>
 
               {/* Create Folder Button */}
-              <Button onClick={() => openFolderForm()} variant="outline" className="h-12 px-6 bg-white">
+              <Button
+                onClick={() => openFolderForm()}
+                variant="outline"
+                className="h-12 px-6 bg-white"
+              >
                 <FolderPlus className="w-5 h-5 mr-2" />
                 Create Folder
               </Button>
@@ -1300,12 +1122,14 @@ export default function AdminFilesPage() {
                           <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed" title={file.description}>
                             {file.description || "No description provided"}
                           </p>
+
                           <div className="flex items-center space-x-2 text-xs text-gray-500">
                             <Calendar className="w-3 h-3" />
                             <span>{new Date(file.createdAt).toLocaleDateString()}</span>
                             <span>•</span>
                             <span>{formatFileSize(file.file.size)}</span>
                           </div>
+
                           <div className="flex flex-wrap gap-2">
                             {file.category && (
                               <Badge variant="outline" className="text-xs capitalize rounded-lg">
@@ -1323,12 +1147,14 @@ export default function AdminFilesPage() {
                               </Badge>
                             )}
                           </div>
+
                           {file.folder && (
                             <div className="flex items-center gap-2 text-xs text-gray-500 bg-blue-50 px-2 py-1 rounded-lg">
                               {getFolderIcon(file.folder.accessLevel, file.folder.isDefault, file.folder.isPublic)}
                               <span>In: {file.folder.name}</span>
                             </div>
                           )}
+
                           {file.sharedWith && file.sharedWith.length > 0 && (
                             <div className="flex items-center gap-1 text-xs text-gray-500 bg-green-50 px-2 py-1 rounded-lg">
                               <Share className="w-3 h-3" />
@@ -1337,6 +1163,7 @@ export default function AdminFilesPage() {
                               </span>
                             </div>
                           )}
+
                           <div className="flex space-x-2 pt-2 border-t border-gray-100">
                             <Button
                               size="sm"
@@ -1514,7 +1341,6 @@ export default function AdminFilesPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Enhanced Folder Structure Modal */}
         <Dialog open={showFolderStructureModal} onOpenChange={setShowFolderStructureModal}>
           <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl">
             <DialogHeader>
@@ -1549,18 +1375,18 @@ export default function AdminFilesPage() {
               </div>
 
               {/* Breadcrumb Navigation */}
-              <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-xl overflow-x-auto">
+              <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-xl">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => navigateToFolder(null)}
-                  className="flex items-center gap-2 hover:bg-gray-200 flex-shrink-0"
+                  className="flex items-center gap-2 hover:bg-gray-200"
                 >
                   <Home className="w-4 h-4" />
                   Root
                 </Button>
                 {breadcrumbPath.map((item, index) => (
-                  <div key={item.id} className="flex items-center gap-2 flex-shrink-0">
+                  <div key={item.id} className="flex items-center gap-2">
                     <ChevronRight className="w-4 h-4 text-gray-400" />
                     <Button
                       variant="ghost"
@@ -1618,13 +1444,12 @@ export default function AdminFilesPage() {
                                 <div className="flex flex-wrap gap-1">
                                   <Badge
                                     variant="outline"
-                                    className={`text-xs ${
-                                      folder.isPublic || folder.accessLevel === "public"
-                                        ? "bg-green-100 text-green-700"
-                                        : folder.accessLevel === "private"
-                                          ? "bg-red-100 text-red-700"
-                                          : "bg-orange-100 text-orange-700"
-                                    }`}
+                                    className={`text-xs ${folder.isPublic || folder.accessLevel === "public"
+                                      ? "bg-green-100 text-green-700"
+                                      : folder.accessLevel === "private"
+                                        ? "bg-red-100 text-red-700"
+                                        : "bg-orange-100 text-orange-700"
+                                      }`}
                                   >
                                     {folder.isPublic || folder.accessLevel === "public"
                                       ? "Public"
@@ -1703,7 +1528,6 @@ export default function AdminFilesPage() {
             </div>
           </DialogContent>
         </Dialog>
-
         {/* Enhanced View File Modal */}
         <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl">
@@ -1734,10 +1558,12 @@ export default function AdminFilesPage() {
                     </p>
                   </div>
                 </div>
+
                 <div className="p-4 bg-gray-50 rounded-xl">
                   <Label className="text-sm font-medium text-gray-600">Description</Label>
                   <p className="text-sm text-gray-900 mt-1">{selectedFile.description || "No description provided"}</p>
                 </div>
+
                 <div className="grid grid-cols-2 gap-6">
                   <div className="p-4 bg-gray-50 rounded-xl">
                     <Label className="text-sm font-medium text-gray-600">Priority</Label>
@@ -1759,6 +1585,7 @@ export default function AdminFilesPage() {
                     </Badge>
                   </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-6">
                   <div className="p-4 bg-gray-50 rounded-xl">
                     <Label className="text-sm font-medium text-gray-600">Created By</Label>
@@ -1772,15 +1599,12 @@ export default function AdminFilesPage() {
                     <p className="text-sm text-gray-900 mt-1">{new Date(selectedFile.createdAt).toLocaleString()}</p>
                   </div>
                 </div>
+
                 {selectedFile.folder && (
                   <div className="p-4 bg-blue-50 rounded-xl">
                     <Label className="text-sm font-medium text-blue-600">Folder Location</Label>
                     <div className="flex items-center gap-2 mt-2">
-                      {getFolderIcon(
-                        selectedFile.folder.accessLevel,
-                        selectedFile.folder.isDefault,
-                        selectedFile.folder.isPublic,
-                      )}
+                      {getFolderIcon(selectedFile.folder.accessLevel, selectedFile.folder.isDefault, selectedFile.folder.isPublic)}
                       <span className="text-sm font-medium text-blue-900">{selectedFile.folder.name}</span>
                       {selectedFile.folder.isPublic && (
                         <Badge variant="outline" className="text-xs bg-green-100 text-green-700">
@@ -1790,6 +1614,7 @@ export default function AdminFilesPage() {
                     </div>
                   </div>
                 )}
+
                 {selectedFile.sharedWith && selectedFile.sharedWith.length > 0 && (
                   <div className="p-4 bg-blue-50 rounded-xl">
                     <Label className="text-sm font-medium text-blue-600">
@@ -1807,6 +1632,7 @@ export default function AdminFilesPage() {
                     </div>
                   </div>
                 )}
+
                 <div className="p-4 bg-gray-50 rounded-xl">
                   <Label className="text-sm font-medium text-gray-600">File Attachment</Label>
                   <div className="flex items-center justify-between p-4 border border-gray-200 rounded-xl mt-2 bg-white">
@@ -1825,6 +1651,7 @@ export default function AdminFilesPage() {
                     </Button>
                   </div>
                 </div>
+
                 {selectedFile.comments && selectedFile.comments.length > 0 && (
                   <div className="p-4 bg-gray-50 rounded-xl">
                     <Label className="text-sm font-medium text-gray-600">
@@ -1840,6 +1667,7 @@ export default function AdminFilesPage() {
                     </div>
                   </div>
                 )}
+
                 <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
                   <Button variant="outline" onClick={() => setShowViewModal(false)} className="rounded-xl">
                     Close
@@ -1904,7 +1732,7 @@ export default function AdminFilesPage() {
           onOpenChange={setShowUploadModal}
           onSubmit={handleFileUpload}
           folders={allFolders}
-          currentFolder={currentFolderId}
+          currentFolder={currentFolder}
           isProcessing={isProcessing}
         />
 

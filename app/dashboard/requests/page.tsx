@@ -155,504 +155,665 @@ interface RequestItem {
   dueDate?: string
   isUrgent?: boolean
 }
+// Enhanced color scheme
+const colors = {
+  primary: "#1e40af",
+  secondary: "#3b82f6",
+  success: "#10b981",
+  warning: "#f59e0b",
+  danger: "#ef4444",
+  gray: {
+    50: "#f9fafb",
+    100: "#f3f4f6",
+    200: "#e5e7eb",
+    300: "#d1d5db",
+    400: "#9ca3af",
+    500: "#6b7280",
+    600: "#4b5563",
+    700: "#374151",
+    800: "#1f2937",
+    900: "#111827",
+  },
+}
+
+const statusColors = {
+  pending: colors.warning,
+  approved: colors.success,
+  rejected: colors.danger,
+  "sent back": colors.gray[500],
+  "in review": colors.secondary,
+}
+
+const priorityColors = {
+  low: colors.gray[400],
+  medium: colors.warning,
+  high: colors.danger,
+  urgent: "#dc2626",
+}
 
 // Enhanced PDF Styles
 const pdfStyles = StyleSheet.create({
   page: {
     flexDirection: "column",
     backgroundColor: "#ffffff",
-    padding: 40,
+    padding: 30,
     fontFamily: "Helvetica",
+    fontSize: 10,
+    position: "relative",
+    lineHeight: 1.4,
   },
-  header: {
+
+  // Header Section
+  headerContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 25,
+    paddingBottom: 15,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+
+  logoSection: {
+    alignItems: "flex-end",
+    width: 120,
+  },
+
+  logo: {
+    width: 70,
+    height: 35,
+    marginBottom: 5,
+  },
+
+  companyName: {
+    fontSize: 8,
+    color: colors.gray[600],
+    fontWeight: "bold",
+  },
+
+  titleSection: {
+    flex: 1,
+    paddingRight: 20,
+  },
+
+  documentTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: colors.primary,
+    marginBottom: 5,
+  },
+
+  documentSubtitle: {
+    fontSize: 10,
+    color: colors.gray[600],
+    marginBottom: 10,
+  },
+
+  statusContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  // Badge Styles
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontSize: 8,
+    fontWeight: "bold",
+    color: "#ffffff",
+    textAlign: "center",
+    minWidth: 60,
+  },
+
+  // Request Info Section
+  requestInfoContainer: {
+    backgroundColor: colors.gray[50],
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+
+  requestTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: colors.gray[900],
+    marginBottom: 8,
+  },
+
+  requestMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  metaLabel: {
+    fontSize: 9,
+    color: colors.gray[600],
+    marginRight: 5,
+    fontWeight: "bold",
+  },
+
+  metaValue: {
+    fontSize: 9,
+    color: colors.gray[800],
+  },
+
+  // Main Content Layout
+  contentContainer: {
+    flexDirection: "row",
+    gap: 20,
+    marginBottom: 20,
+  },
+
+  leftColumn: {
+    flex: 1.2,
+  },
+
+  rightColumn: {
+    flex: 0.8,
+  },
+
+  // Section Styles
+  section: {
+    marginBottom: 15,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+    borderRadius: 6,
+    backgroundColor: "#ffffff",
+  },
+
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    paddingBottom: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+  },
+
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: "bold",
+    color: colors.primary,
+    flex: 1,
+  },
+
+  sectionCount: {
+    fontSize: 8,
+    color: colors.gray[500],
+    backgroundColor: colors.gray[100],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+
+  // Description
+  description: {
+    fontSize: 10,
+    lineHeight: 1.5,
+    color: colors.gray[700],
+    textAlign: "justify",
+  },
+
+  // Info Rows
+  infoRow: {
+    flexDirection: "row",
+    marginBottom: 6,
+    alignItems: "flex-start",
+  },
+
+  infoLabel: {
+    fontWeight: "bold",
+    width: 70,
+    marginRight: 8,
+    color: colors.gray[600],
+    fontSize: 9,
+  },
+
+  infoValue: {
+    flex: 1,
+    fontSize: 9,
+    color: colors.gray[800],
+  },
+
+  // Department List
+  departmentGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+  },
+
+  departmentChip: {
+    backgroundColor: colors.gray[100],
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+
+  departmentText: {
+    fontSize: 8,
+    color: colors.gray[700],
+  },
+
+  // Status Summary
+  statusGrid: {
+    gap: 8,
+  },
+
+  statusItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 3,
+  },
+
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 8,
+  },
+
+  statusText: {
+    fontSize: 9,
+    flex: 1,
+  },
+
+  statusValue: {
+    fontSize: 8,
+    fontWeight: "bold",
+  },
+
+  // Signature Section
+  signatureSection: {
+    backgroundColor: colors.success + "10",
+    borderWidth: 1,
+    borderColor: colors.success,
+    borderRadius: 8,
+    padding: 12,
+    alignItems: "center",
+  },
+
+  signatureTitle: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: colors.success,
+    marginBottom: 8,
+  },
+
+  signatureStatus: {
+    fontSize: 12,
+    fontWeight: "bold",
+    marginBottom: 5,
+  },
+
+  signatureImage: {
+    width: 100,
+    height: 50,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.success,
+    borderRadius: 4,
+  },
+
+  // Comment Box
+  commentBox: {
+    backgroundColor: colors.warning + "20",
+    borderLeftWidth: 4,
+    borderLeftColor: colors.warning,
+    padding: 10,
+    borderRadius: 4,
+    marginTop: 10,
+  },
+
+  commentTitle: {
+    fontSize: 9,
+    fontWeight: "bold",
+    color: colors.warning,
+    marginBottom: 5,
+  },
+
+  commentText: {
+    fontSize: 9,
+    color: colors.gray[700],
+    lineHeight: 1.4,
+  },
+
+  // Attachments Table
+  attachmentTable: {
+    borderWidth: 1,
+    borderColor: colors.gray[300],
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: colors.gray[100],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[300],
+  },
+
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.gray[200],
+  },
+
+  tableCell: {
+    padding: 8,
+    flex: 1,
+    fontSize: 8,
+  },
+
+  tableCellHeader: {
+    padding: 8,
+    flex: 1,
+    fontSize: 9,
+    fontWeight: "bold",
+    color: colors.gray[700],
+  },
+
+  // Footer
+  footer: {
+    position: "absolute",
+    bottom: 20,
+    left: 30,
+    right: 30,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 40,
-    paddingBottom: 25,
-    borderBottomWidth: 3,
-    borderBottomColor: "#3b82f6",
-    backgroundColor: "#f8fafc",
-    padding: 20,
-    borderRadius: 8,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray[200],
   },
-  logo: {
-    width: 100,
-    height: 100,
+
+  footerText: {
+    fontSize: 8,
+    color: colors.gray[500],
   },
-  companyInfo: {
-    alignItems: "flex-end",
-  },
-  companyName: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#1e293b",
-    marginBottom: 8,
-  },
-  companySubtitle: {
-    fontSize: 14,
-    color: "#64748b",
-    marginBottom: 4,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#1e293b",
-    marginBottom: 30,
-    textAlign: "center",
-    backgroundColor: "#f1f5f9",
-    padding: 15,
-    borderRadius: 8,
-  },
-  section: {
-    marginBottom: 25,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 8,
-    padding: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#1e293b",
-    marginBottom: 15,
-    backgroundColor: "#3b82f6",
-    color: "#ffffff",
-    padding: 10,
-    borderRadius: 6,
-    textAlign: "center",
-  },
-  row: {
-    flexDirection: "row",
-    marginBottom: 12,
-    alignItems: "center",
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: "bold",
-    color: "#475569",
-    width: 140,
-    marginRight: 15,
-  },
-  value: {
-    fontSize: 11,
-    color: "#1e293b",
-    flex: 1,
-  },
-  description: {
-    fontSize: 11,
-    color: "#1e293b",
-    lineHeight: 1.6,
-    marginTop: 8,
-    backgroundColor: "#f8fafc",
-    padding: 15,
-    borderRadius: 6,
-    borderLeftWidth: 4,
-    borderLeftColor: "#3b82f6",
-  },
-  badge: {
-    fontSize: 9,
-    color: "#ffffff",
-    backgroundColor: "#3b82f6",
-    padding: 6,
-    borderRadius: 6,
-    marginRight: 8,
-    fontWeight: "bold",
-  },
-  statusApproved: {
-    backgroundColor: "#10b981",
-  },
-  statusPending: {
-    backgroundColor: "#f59e0b",
-  },
-  statusRejected: {
-    backgroundColor: "#ef4444",
-  },
-  statusNeedSignature: {
-    backgroundColor: "#3b82f6",
-  },
-  statusSentBack: {
-    backgroundColor: "#f97316",
-  },
-  priorityHigh: {
-    backgroundColor: "#ef4444",
-  },
-  priorityMedium: {
-    backgroundColor: "#f59e0b",
-  },
-  priorityLow: {
-    backgroundColor: "#3b82f6",
-  },
-  priorityUrgent: {
-    backgroundColor: "#8b5cf6",
-  },
-  table: {
-    marginTop: 15,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 8,
-  },
-  tableRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-  },
-  tableHeader: {
-    backgroundColor: "#f1f5f9",
-    fontWeight: "bold",
-  },
-  tableCell: {
-    fontSize: 10,
-    padding: 6,
-    flex: 1,
-  },
-  footer: {
-    position: "absolute",
-    bottom: 40,
-    left: 40,
-    right: 40,
-    textAlign: "center",
-    fontSize: 9,
-    color: "#64748b",
-    borderTopWidth: 2,
-    borderTopColor: "#e2e8f0",
-    paddingTop: 15,
-    backgroundColor: "#f8fafc",
-    padding: 15,
-    borderRadius: 8,
-  },
-  signatureSection: {
-    marginTop: 25,
-    padding: 20,
-    backgroundColor: "#ecfdf5",
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "#10b981",
-  },
-  signatureImage: {
-    width: 200,
-    height: 100,
-    marginTop: 15,
-    borderWidth: 2,
-    borderColor: "#10b981",
-    borderRadius: 8,
-  },
-  commentSection: {
-    marginTop: 20,
-    padding: 15,
-    backgroundColor: "#fef3c7",
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: "#f59e0b",
-  },
-  urgentBadge: {
-    backgroundColor: "#dc2626",
-    fontSize: 10,
-    padding: 8,
-    borderRadius: 6,
-    color: "#ffffff",
-    fontWeight: "bold",
-    textAlign: "center",
-  },
+
+  // Watermark
   watermark: {
     position: "absolute",
-    top: "50%",
+    top: "45%",
     left: "50%",
-    transform: "translate(-50%, -50%) rotate(-45deg)",
-    fontSize: 60,
-    color: "#f1f5f9",
-    opacity: 0.1,
+    transform: "translate(-50%, -50%) rotate(-30deg)",
+    fontSize: 80,
+    opacity: 0.05,
     zIndex: -1,
+    fontWeight: "bold",
+    color: colors.gray[400],
   },
 })
 
-// Enhanced PDF Document Component
-const RequestPDF = ({ request }: { request: RequestItem }) => {
+// Enhanced PDF Component
+const RequestPDF = ({ request }: { request: any }) => {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
-      month: "long",
+      month: "short",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     })
   }
 
-  const getStatusStyle = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "approved":
-        return pdfStyles.statusApproved
-      case "pending":
-        return pdfStyles.statusPending
-      case "rejected":
-        return pdfStyles.statusRejected
-      case "need signature":
-        return pdfStyles.statusNeedSignature
-      case "sent back":
-        return pdfStyles.statusSentBack
-      default:
-        return {}
-    }
-  }
+  const getBadge = (text: string, type: "status" | "priority") => {
+    const colorMap = type === "status" ? statusColors : priorityColors
+    const color = colorMap[text.toLowerCase()] || colors.gray[500]
 
-  const getPriorityStyle = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case "urgent":
-        return pdfStyles.priorityUrgent
-      case "high":
-        return pdfStyles.priorityHigh
-      case "medium":
-        return pdfStyles.priorityMedium
-      case "low":
-        return pdfStyles.priorityLow
-      default:
-        return {}
-    }
+    return (
+      <View style={[pdfStyles.badge, { backgroundColor: color }]}>
+        <Text>{text.toUpperCase()}</Text>
+      </View>
+    )
   }
 
   const getSentBackComment = () => {
-    const sentBackAction = request.actionHistory?.find((action) => action.action === "sent_back")
+    const sentBackAction = request.actionHistory?.find((action: any) => action.action === "sent_back")
     return sentBackAction?.comment || ""
   }
+
+  // Remove duplicate directors and group by unique director info
+  const uniqueDirectors =
+    request.assignedDirectors?.reduce((acc: any[], director: any) => {
+      const existing = acc.find(
+        (d) =>
+          d.director?._id === director.director?._id ||
+          (d.director?.firstName === director.director?.firstName &&
+            d.director?.lastName === director.director?.lastName),
+      )
+      if (!existing) {
+        acc.push(director)
+      }
+      return acc
+    }, []) || []
+
+  // Group department approvals by status to avoid repetition
+  const groupedApprovals =
+    request.departmentApprovals?.reduce((acc: any, approval: any) => {
+      const status = approval.status
+      if (!acc[status]) {
+        acc[status] = []
+      }
+      acc[status].push(approval.department.name)
+      return acc
+    }, {}) || {}
 
   return (
     <Document>
       <Page size="A4" style={pdfStyles.page}>
         {/* Watermark */}
-        <Text style={pdfStyles.watermark}>PUFFIN GROUP</Text>
-        {/* Header with Logo */}
-        <View style={pdfStyles.header}>
-          <Image style={pdfStyles.logo} src="/logo.png" />
-          <View style={pdfStyles.companyInfo}>
-            <Text style={pdfStyles.companyName}>Puffin Group</Text>
-            <Text style={pdfStyles.companySubtitle}>Request Management System</Text>
-            <Text style={pdfStyles.companySubtitle}>Generated on {new Date().toLocaleDateString()}</Text>
-            <Text style={pdfStyles.companySubtitle}>Document ID: {request._id.slice(-8).toUpperCase()}</Text>
-          </View>
-        </View>
-        {/* Title with Status */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 30 }}>
-          <Text style={pdfStyles.title}>Request Details Report</Text>
-          <Text style={[pdfStyles.badge, getStatusStyle(request.status)]}>{request.status.toUpperCase()}</Text>
-          {request.isUrgent && <Text style={pdfStyles.urgentBadge}>🚨 URGENT</Text>}
-        </View>
-        {/* Basic Information */}
-        <View style={pdfStyles.section}>
-          <Text style={pdfStyles.sectionTitle}>📋 Request Information</Text>
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Request ID:</Text>
-            <Text style={pdfStyles.value}>{request._id}</Text>
-          </View>
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Title:</Text>
-            <Text style={pdfStyles.value}>{request.title}</Text>
-          </View>
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Category:</Text>
-            <Text style={pdfStyles.value}>{request.category.replace("_", " ").toUpperCase()}</Text>
-          </View>
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Priority:</Text>
-            <Text style={[pdfStyles.badge, getPriorityStyle(request.priority)]}>{request.priority.toUpperCase()}</Text>
-          </View>
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Status:</Text>
-            <Text style={[pdfStyles.badge, getStatusStyle(request.status)]}>{request.status.toUpperCase()}</Text>
-          </View>
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Created:</Text>
-            <Text style={pdfStyles.value}>{formatDate(request.createdAt)}</Text>
-          </View>
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Last Updated:</Text>
-            <Text style={pdfStyles.value}>{formatDate(request.updatedAt)}</Text>
-          </View>
-          {request.dueDate && (
-            <View style={pdfStyles.row}>
-              <Text style={pdfStyles.label}>Due Date:</Text>
-              <Text style={pdfStyles.value}>{formatDate(request.dueDate)}</Text>
-            </View>
-          )}
-        </View>
-        {/* Description */}
-        <View style={pdfStyles.section}>
-          <Text style={pdfStyles.sectionTitle}>📝 Description</Text>
-          <Text style={pdfStyles.description}>{request.description}</Text>
-        </View>
-        {/* Sent Back Comment */}
-        {request.status.toLowerCase() === "sent back" && getSentBackComment() && (
-          <View style={pdfStyles.commentSection}>
-            <Text style={[pdfStyles.sectionTitle, { backgroundColor: "#f59e0b" }]}>⚠️ Sent Back Reason</Text>
-            <Text style={pdfStyles.description}>{getSentBackComment()}</Text>
-          </View>
-        )}
-        {/* Created By */}
-        <View style={pdfStyles.section}>
-          <Text style={pdfStyles.sectionTitle}>👤 Created By</Text>
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Name:</Text>
-            <Text style={pdfStyles.value}>
-              {request.createdBy.firstName} {request.createdBy.lastName}
+        <Text style={pdfStyles.watermark}>{request.status.toUpperCase()}</Text>
+
+        {/* Header */}
+        <View style={pdfStyles.headerContainer}>
+          <View style={pdfStyles.titleSection}>
+            <Text style={pdfStyles.documentTitle}>REQUEST DETAILS</Text>
+            <Text style={pdfStyles.documentSubtitle}>
+              Generated on {new Date().toLocaleDateString()} • ID: {request._id?.slice(-8).toUpperCase()}
             </Text>
+            <View style={pdfStyles.statusContainer}>
+              {getBadge(request.status, "status")}
+              {request.isUrgent && getBadge("urgent", "priority")}
+            </View>
           </View>
-          <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Email:</Text>
-            <Text style={pdfStyles.value}>{request.createdBy.email}</Text>
+
+          <View style={pdfStyles.logoSection}>
+            <Image style={pdfStyles.logo} src="/logo.png?height=35&width=70" />
+            <Text style={pdfStyles.companyName}>PUFFIN GROUP</Text>
           </View>
         </View>
-        {/* Target Departments */}
-        <View style={pdfStyles.section}>
-          <Text style={pdfStyles.sectionTitle}>🏢 Target Departments</Text>
-          {request.targetDepartments.map((dept, index) => (
-            <View key={dept._id} style={pdfStyles.row}>
-              <Text style={pdfStyles.label}>{index + 1}.</Text>
-              <Text style={pdfStyles.value}>
-                {dept.name} - {dept.description}
+
+        {/* Request Info */}
+        <View style={pdfStyles.requestInfoContainer}>
+          <Text style={pdfStyles.requestTitle}>{request.title}</Text>
+          <View style={pdfStyles.requestMeta}>
+            <View style={pdfStyles.metaItem}>
+              <Text style={pdfStyles.metaLabel}>Created by:</Text>
+              <Text style={pdfStyles.metaValue}>
+                {request.createdBy?.firstName} {request.createdBy?.lastName}
               </Text>
             </View>
-          ))}
+            <View style={pdfStyles.metaItem}>
+              <Text style={pdfStyles.metaLabel}>Priority:</Text>
+              <Text style={pdfStyles.metaValue}>{request.priority?.toUpperCase()}</Text>
+            </View>
+            <View style={pdfStyles.metaItem}>
+              <Text style={pdfStyles.metaLabel}>Category:</Text>
+              <Text style={pdfStyles.metaValue}>{request.category?.replace("_", " ").toUpperCase()}</Text>
+            </View>
+          </View>
         </View>
-        {/* Assigned Directors */}
-        {request.assignedDirectors.length > 0 && (
-          <View style={pdfStyles.section}>
-            <Text style={pdfStyles.sectionTitle}>👨‍💼 Assigned Directors</Text>
-            {request.assignedDirectors.map((assignment, index) => (
-              <View key={assignment._id}>
-                <View style={pdfStyles.row}>
-                  <Text style={pdfStyles.label}>Director:</Text>
-                  <Text style={pdfStyles.value}>
-                    {assignment.director
-                      ? `${assignment.director.firstName} ${assignment.director.lastName} (${assignment.director.email})`
-                      : "Not assigned"}
-                  </Text>
+
+        {/* Main Content */}
+        <View style={pdfStyles.contentContainer}>
+          {/* Left Column */}
+          <View style={pdfStyles.leftColumn}>
+            {/* Description */}
+            <View style={pdfStyles.section}>
+              <View style={pdfStyles.sectionHeader}>
+                <Text style={pdfStyles.sectionTitle}>DESCRIPTION</Text>
+              </View>
+              <Text style={pdfStyles.description}>{request.description}</Text>
+            </View>
+
+            {/* Timeline */}
+            <View style={pdfStyles.section}>
+              <View style={pdfStyles.sectionHeader}>
+                <Text style={pdfStyles.sectionTitle}>TIMELINE</Text>
+              </View>
+              <View style={pdfStyles.infoRow}>
+                <Text style={pdfStyles.infoLabel}>Created:</Text>
+                <Text style={pdfStyles.infoValue}>{formatDate(request.createdAt)}</Text>
+              </View>
+              <View style={pdfStyles.infoRow}>
+                <Text style={pdfStyles.infoLabel}>Updated:</Text>
+                <Text style={pdfStyles.infoValue}>{formatDate(request.updatedAt)}</Text>
+              </View>
+              {request.dueDate && (
+                <View style={pdfStyles.infoRow}>
+                  <Text style={pdfStyles.infoLabel}>Due Date:</Text>
+                  <Text style={pdfStyles.infoValue}>{formatDate(request.dueDate)}</Text>
                 </View>
-                <View style={pdfStyles.row}>
-                  <Text style={pdfStyles.label}>Status:</Text>
-                  <Text style={[pdfStyles.badge, getStatusStyle(assignment.status)]}>
-                    {assignment.status.toUpperCase()}
-                  </Text>
-                </View>
-                {assignment.actionComment && (
-                  <View style={pdfStyles.row}>
-                    <Text style={pdfStyles.label}>Comment:</Text>
-                    <Text style={pdfStyles.value}>{assignment.actionComment}</Text>
+              )}
+            </View>
+
+            {/* Target Departments */}
+            <View style={pdfStyles.section}>
+              <View style={pdfStyles.sectionHeader}>
+                <Text style={pdfStyles.sectionTitle}>TARGET DEPARTMENTS</Text>
+                <Text style={pdfStyles.sectionCount}>{request.targetDepartments?.length || 0}</Text>
+              </View>
+              <View style={pdfStyles.departmentGrid}>
+                {request.targetDepartments?.map((dept: any) => (
+                  <View key={dept._id} style={pdfStyles.departmentChip}>
+                    <Text style={pdfStyles.departmentText}>{dept.name}</Text>
                   </View>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          {/* Right Column */}
+          <View style={pdfStyles.rightColumn}>
+            {/* Status Summary */}
+            <View style={pdfStyles.section}>
+              <View style={pdfStyles.sectionHeader}>
+                <Text style={pdfStyles.sectionTitle}>APPROVAL STATUS</Text>
+              </View>
+              <View style={pdfStyles.statusGrid}>
+                {Object.entries(groupedApprovals).map(([status, departments]: [string, any]) => (
+                  <View key={status} style={pdfStyles.statusItem}>
+                    <View
+                      style={[
+                        pdfStyles.statusDot,
+                        { backgroundColor: statusColors[status.toLowerCase()] || colors.gray[400] },
+                      ]}
+                    />
+                    <Text style={pdfStyles.statusText}>{status.charAt(0).toUpperCase() + status.slice(1)}</Text>
+                    <Text style={pdfStyles.statusValue}>({departments.length})</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Directors */}
+              {uniqueDirectors.length > 0 && (
+                <>
+                  <Text style={[pdfStyles.sectionTitle, { marginTop: 10, marginBottom: 5, fontSize: 9 }]}>
+                    DIRECTORS
+                  </Text>
+                  {uniqueDirectors.map((director: any, index: number) => (
+                    <View key={index} style={pdfStyles.statusItem}>
+                      <View
+                        style={[
+                          pdfStyles.statusDot,
+                          { backgroundColor: statusColors[director.status?.toLowerCase()] || colors.gray[400] },
+                        ]}
+                      />
+                      <Text style={pdfStyles.statusText}>
+                        {director.director
+                          ? `${director.director.firstName} ${director.director.lastName}`
+                          : "Director"}
+                      </Text>
+                      <Text style={pdfStyles.statusValue}>{director.status}</Text>
+                    </View>
+                  ))}
+                </>
+              )}
+            </View>
+
+            {/* Digital Signature */}
+            {request.requiresSignature && (
+              <View style={pdfStyles.signatureSection}>
+                <Text style={pdfStyles.signatureTitle}>DIGITAL SIGNATURE</Text>
+                <Text
+                  style={[
+                    pdfStyles.signatureStatus,
+                    { color: request.signatureProvided ? colors.success : colors.danger },
+                  ]}
+                >
+                  {request.signatureProvided ? "SIGNED" : "PENDING"}
+                </Text>
+                {request.signatureProvided && request.signatureDate && (
+                  <Text style={pdfStyles.metaValue}>Signed on {formatDate(request.signatureDate)}</Text>
+                )}
+                {request.signatureData && (
+                  <Image style={pdfStyles.signatureImage} src={request.signatureData || "/placeholder.svg"} />
                 )}
               </View>
-            ))}
-          </View>
-        )}
-        {/* Department Approvals */}
-        {request.departmentApprovals && request.departmentApprovals.length > 0 && (
-          <View style={pdfStyles.section}>
-            <Text style={pdfStyles.sectionTitle}>✅ Department Approvals</Text>
-            <View style={pdfStyles.table}>
-              <View style={[pdfStyles.tableRow, pdfStyles.tableHeader]}>
-                <Text style={pdfStyles.tableCell}>Department</Text>
-                <Text style={pdfStyles.tableCell}>Status</Text>
-                <Text style={pdfStyles.tableCell}>Approved By</Text>
-                <Text style={pdfStyles.tableCell}>Date</Text>
+            )}
+
+            {/* Sent Back Comment */}
+            {request.status.toLowerCase() === "sent back" && getSentBackComment() && (
+              <View style={pdfStyles.commentBox}>
+                <Text style={pdfStyles.commentTitle}>FEEDBACK</Text>
+                <Text style={pdfStyles.commentText}>{getSentBackComment()}</Text>
               </View>
-              {request.departmentApprovals.map((approval, index) => (
+            )}
+          </View>
+        </View>
+
+        {/* Attachments */}
+        {request.attachments?.length > 0 && (
+          <View style={pdfStyles.section}>
+            <View style={pdfStyles.sectionHeader}>
+              <Text style={pdfStyles.sectionTitle}>ATTACHMENTS</Text>
+              <Text style={pdfStyles.sectionCount}>{request.attachments.length}</Text>
+            </View>
+            <View style={pdfStyles.attachmentTable}>
+              <View style={pdfStyles.tableHeader}>
+                <Text style={pdfStyles.tableCellHeader}>File Name</Text>
+                <Text style={pdfStyles.tableCellHeader}>Type</Text>
+                <Text style={pdfStyles.tableCellHeader}>Size</Text>
+              </View>
+              {request.attachments.map((file: any, index: number) => (
                 <View key={index} style={pdfStyles.tableRow}>
-                  <Text style={pdfStyles.tableCell}>{approval.department.name}</Text>
-                  <Text style={pdfStyles.tableCell}>{approval.status}</Text>
-                  <Text style={pdfStyles.tableCell}>
-                    {approval.approvedBy ? `${approval.approvedBy.firstName} ${approval.approvedBy.lastName}` : "N/A"}
-                  </Text>
-                  <Text style={pdfStyles.tableCell}>
-                    {approval.actionDate ? formatDate(approval.actionDate) : "N/A"}
-                  </Text>
+                  <Text style={pdfStyles.tableCell}>{file.name}</Text>
+                  <Text style={pdfStyles.tableCell}>{file.type}</Text>
+                  <Text style={pdfStyles.tableCell}>{(file.size / 1024).toFixed(1)} KB</Text>
                 </View>
               ))}
             </View>
           </View>
         )}
-        {/* Attachments */}
-        {request.attachments.length > 0 && (
-          <View style={pdfStyles.section}>
-            <Text style={pdfStyles.sectionTitle}>📎 Attachments</Text>
-            {request.attachments.map((attachment, index) => (
-              <View key={index} style={pdfStyles.row}>
-                <Text style={pdfStyles.label}>{index + 1}.</Text>
-                <Text style={pdfStyles.value}>
-                  {attachment.name} ({(attachment.size / 1024).toFixed(2)} KB)
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-        {/* Digital Signature Section */}
-        {request.requiresSignature && (
-          <View style={pdfStyles.signatureSection}>
-            <Text style={[pdfStyles.sectionTitle, { backgroundColor: "#10b981" }]}>✍️ Digital Signature</Text>
-            <View style={pdfStyles.row}>
-              <Text style={pdfStyles.label}>Required:</Text>
-              <Text style={pdfStyles.value}>Yes</Text>
-            </View>
-            <View style={pdfStyles.row}>
-              <Text style={pdfStyles.label}>Provided:</Text>
-              <Text style={pdfStyles.value}>{request.signatureProvided ? "Yes" : "No"}</Text>
-            </View>
-            {request.signatureProvided && request.signatureDate && (
-              <View style={pdfStyles.row}>
-                <Text style={pdfStyles.label}>Signed On:</Text>
-                <Text style={pdfStyles.value}>{formatDate(request.signatureDate)}</Text>
-              </View>
-            )}
-            {request.signatureProvided && request.signatureData && (
-              <View>
-                <Text style={pdfStyles.label}>Digital Signature:</Text>
-                <Image style={pdfStyles.signatureImage} src={request.signatureData || "/placeholder.svg"} />
-              </View>
-            )}
-          </View>
-        )}
-        {/* Comments */}
-        {request.comments.length > 0 && (
-          <View style={pdfStyles.section}>
-            <Text style={pdfStyles.sectionTitle}>💬 Comments & Activity</Text>
-            {request.comments.map((comment, index) => (
-              <View
-                key={comment._id}
-                style={{ marginBottom: 15, padding: 10, backgroundColor: "#f8fafc", borderRadius: 6 }}
-              >
-                <View style={pdfStyles.row}>
-                  <Text style={pdfStyles.label}>By:</Text>
-                  <Text style={pdfStyles.value}>
-                    {comment.author.firstName} {comment.author.lastName}
-                  </Text>
-                </View>
-                <View style={pdfStyles.row}>
-                  <Text style={pdfStyles.label}>Date:</Text>
-                  <Text style={pdfStyles.value}>{formatDate(comment.createdAt)}</Text>
-                </View>
-                <View style={pdfStyles.row}>
-                  <Text style={pdfStyles.label}>Comment:</Text>
-                  <Text style={pdfStyles.value}>{comment.text}</Text>
-                </View>
-                {comment.isSignature && (
-                  <Text style={[pdfStyles.badge, pdfStyles.statusApproved]}>DIGITAL SIGNATURE</Text>
-                )}
-                {comment.signatureData && (
-                  <View style={{ marginTop: 10 }}>
-                    <Text style={pdfStyles.label}>Signature:</Text>
-                    <Image style={pdfStyles.signatureImage} src={comment.signatureData || "/placeholder.svg"} />
-                  </View>
-                )}
-              </View>
-            ))}
-          </View>
-        )}
+
         {/* Footer */}
-        <Text style={pdfStyles.footer}>
-          This document was generated automatically by Puffin Group Request Management System
-          {"\n"}© 2025 Puffin Group. All rights reserved.
-          {"\n"}For inquiries, contact: support@puffingroup.com
-        </Text>
+        <View style={pdfStyles.footer}>
+          <Text style={pdfStyles.footerText}>Puffin Group Request Management System</Text>
+          <Text style={pdfStyles.footerText}>Confidential Document</Text>
+        </View>
       </Page>
     </Document>
   )
