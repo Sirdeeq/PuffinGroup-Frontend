@@ -75,16 +75,10 @@ export default function SignatureSettingsPage() {
         const role = localStorage.getItem("userRole") || ""
         setUserRole(role)
 
-        // Load user data
-        const userResponse = await api.getUser(authContext)
-        if (userResponse.success && userResponse.data) {
-          setUser(userResponse.data.user)
-        }
-
         // Load user signature status from API
         const signatureResponse = await api.getUserSignature(authContext)
-        if (signatureResponse.success && signatureResponse.signature) {
-          const signature = signatureResponse.signature as SignatureResponse
+        if (signatureResponse.success) {
+          const signature = signatureResponse.data.signature as SignatureResponse
           setSignatureData({
             hasSignature: signature.enabled,
             enabled: signature.enabled,
