@@ -1,5 +1,4 @@
 "use client"
-
 import { useState, useEffect } from "react"
 import type React from "react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -237,18 +236,21 @@ export default function FileManagerDepartmentPage() {
     priority: "",
     departments: [] as string[],
   })
+
   const [shareFormData, setShareFormData] = useState({
     departments: [] as string[],
     users: [] as string[],
     message: "",
   })
+
   const [folderFormData, setFolderFormData] = useState({
     name: "",
     description: "",
-    accessLevel: "private" as "public" | "department" | "private", // This will be overridden by logic
-    departments: [] as string[], // This will be overridden by logic
+    accessLevel: "private" as "public" | "department" | "private",
+    departments: [] as string[],
     parentFolderId: "",
   })
+
   const [moveFormData, setMoveFormData] = useState({
     targetFolderId: "",
   })
@@ -307,6 +309,7 @@ export default function FileManagerDepartmentPage() {
         }
     }
   }
+
   const themeColors = getThemeColor()
 
   // Redirect if not authenticated
@@ -316,36 +319,39 @@ export default function FileManagerDepartmentPage() {
 
   // Check if user can create folders based on new logic
   const canCreateFolder = () => {
-    const userDeptId = authContext.user?.department
-    console.log(userDeptId)
+    const userDeptId = authContext.user?.department?._id || authContext.user?.department
+    console.log("userDeptId", userDeptId)
 
     // Admin and director can create folders anywhere
     if (authContext.user?.role === "admin" || authContext.user?.role === "director") {
       return true
     }
 
-    // Department users:
-    if (authContext.user?.role === "department") {
-      // At root level (no current folder) - can create private folders
-      if (!currentFolder) {
-        return true
+    // At root level (Public folder) - only private folders can be created
+    if (!currentFolder) {
+      return true // Can create private folders at root
+    }
+
+    // Inside Public folder - only department folders can be created by department users
+    if (currentFolder.name === "Public" && currentFolder.isPublic) {
+      return authContext.user?.role === "department"
+    }
+
+    // Inside another department's folder - disable buttons
+    if (currentFolder.accessLevel === "department") {
+      const isOwnDepartment = currentFolder.departments.some((dept) => dept._id === userDeptId)
+      // const isOwnDepartment = currentFolder.departments.some((dept) => dept._id === userDeptId)
+      console.log("isOwnDepartment", isOwnDepartment)
+      if (!isOwnDepartment) {
+        return false // Cannot create in other department folders
       }
-      
-      // Inside Puffin Group's Public folder - can create department folders
-      if (currentFolder.name === "Puffin Group" && currentFolder.isPublic) {
-        return true
-      }
-      
-      // Inside department folder within Puffin Group's Public folder - can create folders if it's their department
-      if (currentFolder.accessLevel === "public" && currentFolder.parentFolder?.name === "Puffin Group") {
-        const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
-        return isOwnDepartmentFolder
-      }
-      
-      // Inside a private folder - can create sub-private folders if they are the creator
-      if (currentFolder.accessLevel === "private") {
-        return currentFolder.createdBy?._id === authContext.user?._id
-      }
+      // In own department folder - can create public folders
+      return true
+    }
+
+    // In private folders - only creator can create subfolders
+    if (currentFolder.accessLevel === "private") {
+      return currentFolder.createdBy?._id === authContext.user?._id
     }
 
     return false
@@ -360,25 +366,25 @@ export default function FileManagerDepartmentPage() {
       return true
     }
 
-    // At root level - cannot upload files directly
+    // At root level - cannot upload
     if (!currentFolder) {
       return false
     }
 
-    // Inside "Public" folder (which is a default public folder) - allow uploads
-    if (currentFolder.name === "Public" && currentFolder.isPublic) {
-      return true
-    }
-
-    // Inside a department folder - allow uploads if it's their own department's folder
+    // Inside another department's folder - disable upload
     if (currentFolder.accessLevel === "department") {
-      const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
-      return isOwnDepartmentFolder
+      const isOwnDepartment = currentFolder.departments.some((dept) => dept._id === userDeptId)
+      return isOwnDepartment
     }
 
-    // Inside a private folder - allow uploads if they are the creator
+    // In private folders - only creator can upload
     if (currentFolder.accessLevel === "private") {
       return currentFolder.createdBy?._id === authContext.user?._id
+    }
+
+    // In public folders within own department
+    if (currentFolder.accessLevel === "public") {
+      return currentFolder.departments.some((dept) => dept._id === userDeptId)
     }
 
     return false
@@ -411,6 +417,7 @@ export default function FileManagerDepartmentPage() {
   const getFileIcon = (fileType: string, fileName: string) => {
     const type = fileType.toLowerCase()
     const extension = fileName.split(".").pop()?.toLowerCase()
+
     if (type.includes("image") || ["jpg", "jpeg", "png", "gif", "svg", "webp"].includes(extension || "")) {
       return <ImageIcon className="w-8 h-8 text-blue-500" />
     }
@@ -452,6 +459,7 @@ export default function FileManagerDepartmentPage() {
     try {
       setLoading(true)
       console.log("Fetching data for folder:", currentFolder?._id || "root")
+
       const departmentId = authContext.user?.department?._id || authContext.user?.department
 
       // Build query parameters based on current folder
@@ -461,6 +469,7 @@ export default function FileManagerDepartmentPage() {
       } else {
         folderParams.parentId = "root"
       }
+
       if (authContext.user?.role === "department" && departmentId) {
         folderParams.includeAll = true
       }
@@ -468,11 +477,14 @@ export default function FileManagerDepartmentPage() {
       // Fetch folders
       const foldersResponse = await api.getFolders(folderParams, authContext)
       console.log("Folders response:", foldersResponse)
+
       if (foldersResponse.success && foldersResponse.data?.data) {
         const fetchedFolders = Array.isArray(foldersResponse.data.data)
           ? foldersResponse.data.data
           : foldersResponse.data.data.folders || []
+
         console.log("Setting folders:", fetchedFolders)
+
         const processedFolders = fetchedFolders.map((folder: any) => ({
           ...folder,
           fileCount: folder.fileCount || 0,
@@ -483,16 +495,20 @@ export default function FileManagerDepartmentPage() {
           canUpload: folder.canUpload !== false,
           canCreateSubfolder: folder.canCreateSubfolder !== false,
         }))
+
         setFolders(processedFolders)
       }
 
       // Fetch files
       const filesParams: any = currentFolder ? { folderId: currentFolder._id } : {}
+
       if (authContext.user?.role === "department" && departmentId) {
         filesParams.department = departmentId
       }
+
       const filesResponse = await api.getFiles(filesParams, authContext)
       console.log("Files response:", filesResponse)
+
       if (filesResponse.success && filesResponse.data) {
         const filesData = Array.isArray(filesResponse.data) ? filesResponse.data : filesResponse.data.files || []
         const processedFiles = filesData.map((file: any) => ({
@@ -523,6 +539,7 @@ export default function FileManagerDepartmentPage() {
           canDelete: file.createdBy?._id === authContext.user?._id || authContext.user?.role === "admin",
           canShare: file.canShare !== false,
         }))
+
         console.log("Setting files:", processedFiles)
         setFiles(processedFiles)
       }
@@ -565,13 +582,16 @@ export default function FileManagerDepartmentPage() {
         api.getUsers(authContext),
         api.getFolders({ includeAll: true }, authContext),
       ])
+
       if (deptResponse.success && deptResponse.data) {
         setDepartments(deptResponse.data.departments || [])
       }
+
       if (usersResponse.success && usersResponse.data) {
         const filteredUsers = (usersResponse.data.users || []).filter((user) => user.role === "user")
         setUsers(filteredUsers)
       }
+
       if (foldersResponse.success && foldersResponse.data) {
         const allFolders = Array.isArray(foldersResponse.data)
           ? foldersResponse.data
@@ -596,7 +616,9 @@ export default function FileManagerDepartmentPage() {
     console.log("Filtering items. Current folder:", currentFolder?._id)
     console.log("Available folders:", folders)
     console.log("Available files:", files)
+
     let items: (FileData | FolderData)[] = []
+
     if (!currentFolder) {
       // At root level: show public folder and private folders created by user
       const accessibleFolders = folders.filter((folder) => {
@@ -604,6 +626,7 @@ export default function FileManagerDepartmentPage() {
         if (folder.isPublic || folder.accessLevel === "public") {
           return true
         }
+
         if (folder.accessLevel === "department") {
           return true
         }
@@ -613,6 +636,7 @@ export default function FileManagerDepartmentPage() {
         }
         return false
       })
+
       items = [...accessibleFolders]
       console.log("Root level items:", items)
     } else {
@@ -621,6 +645,7 @@ export default function FileManagerDepartmentPage() {
         (folder) => folder.parentFolder && folder.parentFolder._id === currentFolder._id,
       )
       const folderFiles = files.filter((file) => file.folder && file.folder._id === currentFolder._id)
+
       items = [...subfolders, ...folderFiles]
       console.log("Folder items:", items)
     }
@@ -630,6 +655,7 @@ export default function FileManagerDepartmentPage() {
       const name = "name" in item ? item.name : item.title || ""
       const description = item.description || ""
       const createdBy = item.createdBy ? `${item.createdBy.firstName} ${item.createdBy.lastName}` : ""
+
       return (
         name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -641,11 +667,13 @@ export default function FileManagerDepartmentPage() {
     filtered.sort((a, b) => {
       const aIsFolder = !("file" in a)
       const bIsFolder = !("file" in b)
+
       // Always show folders before files
       if (aIsFolder && !bIsFolder) return -1
       if (!aIsFolder && bIsFolder) return 1
 
       let aValue: any, bValue: any
+
       switch (sortBy) {
         case "name":
           aValue = ("name" in a ? a.name : a.title || "").toLowerCase()
@@ -681,6 +709,7 @@ export default function FileManagerDepartmentPage() {
     const totalItems = filtered.length
     const pages = Math.ceil(totalItems / ITEMS_PER_PAGE)
     setTotalPages(pages)
+
     // Reset to first page if current page is out of bounds
     if (currentPage > pages && pages > 0) {
       setCurrentPage(1)
@@ -690,6 +719,7 @@ export default function FileManagerDepartmentPage() {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
     const endIndex = startIndex + ITEMS_PER_PAGE
     const paginatedResult = filtered.slice(startIndex, endIndex)
+
     console.log("Paginated items:", paginatedResult)
     setPaginatedItems(paginatedResult)
   }, [files, folders, searchTerm, sortBy, sortDirection, currentFolder, currentPage, authContext.user])
@@ -756,34 +786,30 @@ export default function FileManagerDepartmentPage() {
   const handleCreateFolder = async () => {
     try {
       setIsProcessing(true)
-      const userDeptId = authContext.user?.department?._id || authContext.user?.department
-      let newAccessLevel: "public" | "department" | "private" = "public"
-      let newDepartments: string[] = []
-
-      if (!currentFolder) {
-        // At root level, only private folders can be created
-        newAccessLevel = "private"
-        newDepartments = []
-      } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
-        // Inside "Public" folder, only department folders can be created
-        newAccessLevel = "department"
-        newDepartments = userDeptId ? [userDeptId] : []
-      } else if (currentFolder.accessLevel === "public") {
-        // Inside a department folder, only public folders can be created
-        newAccessLevel = "public"
-        newDepartments = userDeptId ? [userDeptId] : []
-      } else if (currentFolder.accessLevel === "private") {
-        // Inside a private folder, only private subfolders can be created
-        newAccessLevel = "private"
-        newDepartments = []
-      }
+      const departmentId = authContext.user?.department?._id || authContext.user?.department
 
       const formData = {
-        name: folderFormData.name,
-        description: folderFormData.description,
-        accessLevel: newAccessLevel,
-        departments: newDepartments,
+        ...folderFormData,
         parentFolder: currentFolder?._id || null,
+        departments: [] as string[],
+      }
+
+      // Set access level and departments based on current location
+      if (!currentFolder) {
+        // At root level - only private folders
+        formData.accessLevel = "private"
+        formData.departments = []
+      } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
+        // Inside Public folder - create department folders
+        formData.accessLevel = "department"
+        formData.departments = [departmentId]
+      } else if (currentFolder.accessLevel === "department") {
+        // Inside department folder - create public folders
+        formData.accessLevel = "public"
+        formData.departments = [departmentId]
+      } else {
+        // Default to form data
+        formData.departments = folderFormData.accessLevel === "department" ? [departmentId] : []
       }
 
       const response = await api.createFolder(formData, authContext)
@@ -796,7 +822,7 @@ export default function FileManagerDepartmentPage() {
         setFolderFormData({
           name: "",
           description: "",
-          accessLevel: "public", // Reset to default, will be overridden
+          accessLevel: "private",
           departments: [],
           parentFolderId: "",
         })
@@ -875,12 +901,14 @@ export default function FileManagerDepartmentPage() {
       const promises = selectedItems.map(async (itemId) => {
         const item = paginatedItems.find((i) => i._id === itemId)
         if (!item) return
+
         if ("file" in item) {
           return api.deleteFile(itemId, authContext)
         } else {
           return api.deleteFolder(itemId, authContext)
         }
       })
+
       await Promise.all(promises)
       toast({
         title: "Success",
@@ -907,8 +935,10 @@ export default function FileManagerDepartmentPage() {
       const promises = selectedItems.map(async (itemId) => {
         const item = paginatedItems.find((i) => i._id === itemId)
         if (!item || !("file" in item)) return // Only move files for now
+
         return api.moveFile(itemId, moveFormData.targetFolderId, authContext)
       })
+
       await Promise.all(promises)
       toast({
         title: "Success",
@@ -950,7 +980,9 @@ export default function FileManagerDepartmentPage() {
   const handleDrop = async (e: React.DragEvent, targetFolder: FolderData) => {
     e.preventDefault()
     setIsDragOver(null)
+
     if (!draggedFile) return
+
     try {
       setIsProcessing(true)
       const response = await api.moveFile(draggedFile._id, targetFolder._id, authContext)
@@ -989,6 +1021,7 @@ export default function FileManagerDepartmentPage() {
     const now = new Date()
     const diffTime = Math.abs(now.getTime() - date.getTime())
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
     if (diffDays === 1) return "Today"
     if (diffDays === 2) return "Yesterday"
     if (diffDays <= 7) return `${diffDays - 1} days ago`
@@ -1064,6 +1097,7 @@ export default function FileManagerDepartmentPage() {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+
       toast({
         title: "Download started",
         description: `Downloading ${file.file.name}`,
@@ -1080,6 +1114,7 @@ export default function FileManagerDepartmentPage() {
   // Edit and Share handlers
   const handleEditSubmit = async () => {
     if (!selectedFile) return
+
     try {
       setIsProcessing(true)
       const response = await api.updateFile(selectedFile._id, editFormData, authContext)
@@ -1109,14 +1144,17 @@ export default function FileManagerDepartmentPage() {
       setIsProcessing(true)
       const itemId = selectedFile?._id || selectedFolder?._id
       if (!itemId) return
+
       const shareData = {
         departments: shareFormData.departments,
         users: shareFormData.users,
         message: shareFormData.message,
       }
+
       const response = selectedFile
         ? await api.shareFile(itemId, shareData, authContext)
         : await api.shareFolder(itemId, shareData, authContext)
+
       if (response.success) {
         toast({
           title: "Success",
@@ -1177,6 +1215,7 @@ export default function FileManagerDepartmentPage() {
   const renderBreadcrumb = () => {
     const maxVisible = 3
     const showDots = breadcrumb.length > maxVisible
+
     return (
       <div className="flex items-center gap-1 text-sm overflow-x-auto">
         <Home className="w-4 h-4 text-gray-500 flex-shrink-0" />
@@ -1186,6 +1225,7 @@ export default function FileManagerDepartmentPage() {
         >
           Public
         </button>
+
         {breadcrumb.length > 0 && (
           <>
             {showDots && breadcrumb.length > maxVisible && (
@@ -1208,6 +1248,7 @@ export default function FileManagerDepartmentPage() {
                 </DropdownMenu>
               </>
             )}
+
             {(showDots ? breadcrumb.slice(-maxVisible + 1) : breadcrumb).map((item, index, arr) => (
               <div key={item.id} className="flex items-center gap-1 flex-shrink-0">
                 <ChevronRight className="w-4 h-4 text-gray-400" />
@@ -1241,32 +1282,6 @@ export default function FileManagerDepartmentPage() {
         </div>
       </div>
     )
-  }
-
-  const getCreateFolderDescription = () => {
-    if (!currentFolder) {
-      return "You can only create private folders at the root level."
-    } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
-      return "You can only create department folders inside the Public folder."
-    } else if (currentFolder.accessLevel === "department") {
-      return "You can only create public folders inside your department folder."
-    } else if (currentFolder.accessLevel === "private") {
-      return "You can only create private subfolders inside this private folder."
-    }
-    return "Create a new folder in your accessible area."
-  }
-
-  const getCreateFolderAccessLevelText = () => {
-    if (!currentFolder) {
-      return "Private folders will be created at root level."
-    } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
-      return "Department folders will be created."
-    } else if (currentFolder.accessLevel === "department") {
-      return "Public folders will be created in your department."
-    } else if (currentFolder.accessLevel === "private") {
-      return "Private subfolders will be created."
-    }
-    return "Access level determined by current location."
   }
 
   return (
@@ -1309,10 +1324,12 @@ export default function FileManagerDepartmentPage() {
                 {currentFolder ? currentFolder.description : "Access public folders and your department's files"}
               </p>
             </div>
+
             {/* Right side - Action buttons */}
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Notification Bell */}
               {renderNotificationBell()}
+
               {/* Selection Mode Toggle */}
               {paginatedItems.length > 0 && (
                 <Button
@@ -1327,6 +1344,7 @@ export default function FileManagerDepartmentPage() {
                   <span className="hidden sm:inline">{selectMode ? "Exit Select" : "Select"}</span>
                 </Button>
               )}
+
               {/* Refresh Button */}
               <Button
                 variant="outline"
@@ -1338,6 +1356,7 @@ export default function FileManagerDepartmentPage() {
                 <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 ${loading ? "animate-spin" : ""}`} />
                 <span className="hidden sm:inline text-xs sm:text-sm">Refresh</span>
               </Button>
+
               {/* Items Count Badge */}
               <Badge
                 variant="outline"
@@ -1346,16 +1365,18 @@ export default function FileManagerDepartmentPage() {
                 <span className="font-medium">{filteredItems.length}</span>
                 <span className="hidden sm:inline ml-1">Items</span>
               </Badge>
+
               {/* New Folder Button */}
               <Button
                 variant="outline"
                 onClick={() => setShowCreateFolderModal(true)}
-                // disabled={!canCreateFolder()}
+                disabled={!canCreateFolder()}
                 className="flex items-center gap-1 sm:gap-2 hover:bg-gray-50 transition-all duration-200 h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm"
               >
                 <FolderPlus className="w-3 h-3 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">New Folder</span>
               </Button>
+
               {/* Upload File Button */}
               <Button
                 onClick={() => setShowUploadModal(true)}
@@ -1368,6 +1389,7 @@ export default function FileManagerDepartmentPage() {
             </div>
           </div>
         </div>
+
         {/* Breadcrumb Navigation */}
         <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
@@ -1384,9 +1406,11 @@ export default function FileManagerDepartmentPage() {
                   <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4" />
                 </Button>
               )}
+
               {/* Breadcrumb */}
               <div className="min-w-0 flex-1 overflow-hidden">{renderBreadcrumb()}</div>
             </div>
+
             {/* Current Folder Info Button */}
             {currentFolder && (
               <Button
@@ -1400,6 +1424,7 @@ export default function FileManagerDepartmentPage() {
             )}
           </div>
         </div>
+
         {/* Selection Actions Bar */}
         {selectMode && selectedItems.length > 0 && (
           <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
@@ -1459,6 +1484,7 @@ export default function FileManagerDepartmentPage() {
             </div>
           </div>
         )}
+
         {/* Enhanced Search and Controls */}
         <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4 lg:gap-6">
@@ -1504,6 +1530,7 @@ export default function FileManagerDepartmentPage() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
               {/* View Toggle */}
               <div className="flex items-center bg-gray-100 rounded-xl p-1">
                 <Button
@@ -1530,6 +1557,7 @@ export default function FileManagerDepartmentPage() {
             </div>
           </div>
         </div>
+
         {/* Items Display */}
         {paginatedItems.length === 0 ? (
           <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200">
@@ -1580,6 +1608,7 @@ export default function FileManagerDepartmentPage() {
                   const folder = isFolder ? (item as FolderData) : null
                   const file = !isFolder ? (item as FileData) : null
                   const isSelected = selectedItems.includes(item._id)
+
                   return (
                     <Card
                       key={item._id}
@@ -1613,6 +1642,7 @@ export default function FileManagerDepartmentPage() {
                             />
                           </div>
                         )}
+
                         <div className="mb-3 sm:mb-4 flex justify-center">
                           <div className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
                             {isFolder
@@ -1620,16 +1650,19 @@ export default function FileManagerDepartmentPage() {
                               : getFileIcon(file!.file.type, file!.file.name)}
                           </div>
                         </div>
+
                         <h3
                           className="font-semibold text-xs sm:text-sm text-gray-900 truncate mb-1 sm:mb-2 group-hover:text-blue-600 transition-colors duration-200"
                           title={isFolder ? folder!.name : file!.name}
                         >
                           {isFolder ? folder!.name : file!.name}
                         </h3>
+
                         <div className="flex items-center justify-center gap-1 text-xs text-gray-400">
                           <Clock className="w-3 h-3" />
                           {formatDate(item.createdAt)}
                         </div>
+
                         {/* Action Menu */}
                         {!selectMode && (
                           <div className="absolute top-2 sm:top-3 right-2 sm:right-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
@@ -1702,6 +1735,7 @@ export default function FileManagerDepartmentPage() {
                             </DropdownMenu>
                           </div>
                         )}
+
                         {/* Status Indicators */}
                         <div className="absolute top-2 sm:top-3 left-2 sm:left-3 flex flex-col gap-1">
                           {isFolder && (
@@ -1739,6 +1773,7 @@ export default function FileManagerDepartmentPage() {
                             </Badge>
                           )}
                         </div>
+
                         {/* Drag indicator for files */}
                         {!isFolder && !selectMode && (
                           <div
@@ -1753,6 +1788,7 @@ export default function FileManagerDepartmentPage() {
                 })}
               </div>
             )}
+
             {/* List View */}
             {viewMode === "list" && (
               <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1762,6 +1798,7 @@ export default function FileManagerDepartmentPage() {
                     const folder = isFolder ? (item as FolderData) : null
                     const file = !isFolder ? (item as FileData) : null
                     const isSelected = selectedItems.includes(item._id)
+
                     return (
                       <div
                         key={item._id}
@@ -1792,6 +1829,7 @@ export default function FileManagerDepartmentPage() {
                             <Checkbox checked={isSelected} onCheckedChange={() => toggleItemSelection(item._id)} />
                           </div>
                         )}
+
                         <div className="flex items-center flex-1 min-w-0">
                           <div className="mr-3 sm:mr-4 p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
                             {isFolder
@@ -1841,6 +1879,7 @@ export default function FileManagerDepartmentPage() {
                             <p className="text-xs sm:text-sm text-gray-500 truncate">{item.description}</p>
                           </div>
                         </div>
+
                         <div className="hidden md:flex items-center space-x-4 lg:space-x-8 text-xs sm:text-sm text-gray-500">
                           <span className="w-20 lg:w-24 text-right font-medium">
                             {isFolder ? `${folder!.fileCount || 0} files` : formatFileSize(file!.file.size)}
@@ -1856,6 +1895,7 @@ export default function FileManagerDepartmentPage() {
                             {formatDate(item.createdAt)}
                           </span>
                         </div>
+
                         {!selectMode && (
                           <div className="ml-3 sm:ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                             <DropdownMenu>
@@ -1933,6 +1973,7 @@ export default function FileManagerDepartmentPage() {
                 </div>
               </div>
             )}
+
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
@@ -1992,13 +2033,16 @@ export default function FileManagerDepartmentPage() {
             )}
           </>
         )}
+
         {/* All Modals */}
         {/* Create Folder Modal */}
         <Dialog open={showCreateFolderModal} onOpenChange={setShowCreateFolderModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold">Create New Folder</DialogTitle>
-              <DialogDescription>{getCreateFolderDescription()}</DialogDescription>
+              <DialogDescription>
+                Create a new folder {currentFolder ? `inside ${currentFolder.name}` : "in your accessible area"}
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2019,15 +2063,7 @@ export default function FileManagerDepartmentPage() {
                     Access Level
                   </Label>
                   <Select
-                    value={
-                      !currentFolder
-                        ? "private"
-                        : currentFolder.name === "Public" && currentFolder.isPublic
-                          ? "department"
-                          : currentFolder.accessLevel === "department"
-                            ? "public"
-                            : "private"
-                    }
+                    value={folderFormData.accessLevel}
                     onValueChange={(value: "public" | "department" | "private") =>
                       setFolderFormData((prev) => ({ ...prev, accessLevel: value }))
                     }
@@ -2042,7 +2078,15 @@ export default function FileManagerDepartmentPage() {
                       <SelectItem value="private">Private - Only you can access</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-gray-500 mt-1">{getCreateFolderAccessLevelText()}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {!currentFolder
+                      ? "Private folders will be created at root level"
+                      : currentFolder.name === "Public"
+                        ? "Department folders will be created"
+                        : currentFolder.accessLevel === "department"
+                          ? "Public folders will be created in your department"
+                          : "Access level determined by parent folder"}
+                  </p>
                 </div>
               </div>
               <div>
@@ -2084,6 +2128,7 @@ export default function FileManagerDepartmentPage() {
             </div>
           </DialogContent>
         </Dialog>
+
         {/* Upload File Modal */}
         <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl">
@@ -2106,6 +2151,7 @@ export default function FileManagerDepartmentPage() {
             />
           </DialogContent>
         </Dialog>
+
         {/* Move Items Modal */}
         <Dialog open={showMoveModal} onOpenChange={setShowMoveModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
@@ -2166,6 +2212,7 @@ export default function FileManagerDepartmentPage() {
             </div>
           </DialogContent>
         </Dialog>
+
         {/* Bulk Delete Confirmation Dialog */}
         <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
           <AlertDialogContent className="rounded-2xl">
@@ -2196,6 +2243,7 @@ export default function FileManagerDepartmentPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
         {/* View File Modal */}
         <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
@@ -2271,6 +2319,7 @@ export default function FileManagerDepartmentPage() {
             )}
           </DialogContent>
         </Dialog>
+
         {/* View Folder Modal */}
         <Dialog open={showFolderViewModal} onOpenChange={setShowFolderViewModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
@@ -2346,6 +2395,7 @@ export default function FileManagerDepartmentPage() {
             )}
           </DialogContent>
         </Dialog>
+
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
           <AlertDialogContent className="rounded-2xl">
@@ -2380,6 +2430,7 @@ export default function FileManagerDepartmentPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
         {/* Edit File Modal */}
         <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
@@ -2478,6 +2529,7 @@ export default function FileManagerDepartmentPage() {
             )}
           </DialogContent>
         </Dialog>
+
         {/* Share Modal */}
         <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
           <DialogContent className="max-w-2xl rounded-2xl">

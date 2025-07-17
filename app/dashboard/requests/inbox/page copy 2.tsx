@@ -1,4 +1,5 @@
 "use client"
+
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -36,13 +37,10 @@ import {
   Star,
   Zap,
   Settings,
-  Filter,
   AlertTriangle,
 } from "lucide-react"
 import { redirect } from "next/navigation"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useRouter } from "next/navigation" // Import useRouter
 
 interface ReceivedRequest {
   _id: string
@@ -60,7 +58,7 @@ interface ReceivedRequest {
       lastName: string
       email: string
       avatar?: string
-    } | null
+    }
     status: string
     signatureProvided?: boolean
     signatureData?: string
@@ -141,8 +139,6 @@ export default function RequestInboxPage() {
   const { toast } = useToast()
   const authContext = useAuth()
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null)
-  const router = useRouter() // Initialize useRouter
-
   const [receivedRequests, setReceivedRequests] = useState<ReceivedRequest[]>([])
   const [filteredRequests, setFilteredRequests] = useState<ReceivedRequest[]>([])
   const [selectedRequest, setSelectedRequest] = useState<ReceivedRequest | null>(null)
@@ -160,6 +156,8 @@ export default function RequestInboxPage() {
   const [filterStatus, setFilterStatus] = useState("all")
   const [userSignature, setUserSignature] = useState<boolean | null>(null)
 
+
+
   // Check user signature when opening signature dialog
   useEffect(() => {
     if (isSignatureDialogOpen) {
@@ -173,57 +171,39 @@ export default function RequestInboxPage() {
             setUserSignature(false)
           }
         } catch (error) {
-          console.error("Error checking user signature:", error)
+          console.error('Error checking user signature:', error)
           setUserSignature(false)
         }
       }
       checkUserSignature()
     } else {
       setUserSignature(null)
-      setSignatureData("")
+      setSignatureData('')
     }
   }, [isSignatureDialogOpen, authContext])
+
 
   // Redirect if not authenticated
   if (!authContext.isAuthenticated) {
     redirect("/login")
   }
 
-  // Helper function to check if request needs signature (for filtering)
-  const requestNeedsSignature = (request: ReceivedRequest): boolean => {
-    return request.requiresSignature === true && !request.signatureProvided
-  }
-
-  // Helper function to check if request is actionable (for filtering)
-  const requestIsActionable = (request: ReceivedRequest): boolean => {
-    const finalStates = ["approved", "rejected", "completed"]
-    return !finalStates.includes(request.status.toLowerCase())
-  }
-
-  // Helper function to determine if signature option should show in dropdown
-  const shouldShowSignatureOption = (request: ReceivedRequest): boolean => {
-    // Show if request needs signature or user can provide signature
-    return request.requiresSignature === true || canUserSign(request)
-  }
-
-  // Helper function to determine if action option should show in dropdown
-  const shouldShowActionOption = (request: ReceivedRequest): boolean => {
-    // Show if request is actionable or user can take action
-    return requestIsActionable(request) || canUserTakeAction(request)
-  }
-
   // Helper function to determine if user can sign this request
   const canUserSign = (request: ReceivedRequest): boolean => {
     // Check explicit flag from backend first
     if (request.needsMySignature) return true
+
     // Additional client-side checks
     if (!request.requiresSignature) return false
+
     const userRole = authContext.user?.role
-    const userDepartmentId = authContext.user?.department?._id || authContext.user?.departmentId
+    const userDepartmentId = authContext.user?.department || authContext.user?.departmentId
+
     // Admin can sign any request that requires signature
     if (userRole === "admin") {
       return !request.signatureProvided
     }
+
     // Directors can sign if they are assigned to this request
     if (userRole === "director") {
       const assignment = request.assignedDirectors.find(
@@ -231,11 +211,13 @@ export default function RequestInboxPage() {
       )
       return assignment && !assignment.signatureProvided
     }
+
     // Department users can sign if their department is targeted and signature not provided
     if (userRole === "department") {
       const isDepartmentTarget = request.targetDepartments.some((dept) => dept._id === userDepartmentId)
       return isDepartmentTarget && !request.signatureProvided
     }
+
     return false
   }
 
@@ -243,18 +225,22 @@ export default function RequestInboxPage() {
   const canUserTakeAction = (request: ReceivedRequest): boolean => {
     // Check explicit flag from backend first
     if (request.canTakeAction !== undefined) return request.canTakeAction
+
     // Additional client-side checks
     const userRole = authContext.user?.role
-    const userDepartmentId = authContext.user?.department?._id || authContext.user?.departmentId
+    const userDepartmentId = authContext.user?.department || authContext.user?.departmentId
     const requestStatus = request.status.toLowerCase()
+
     // Cannot take action on final states
     if (["approved", "rejected", "completed"].includes(requestStatus)) {
       return false
     }
+
     // Admin can take action on most requests
     if (userRole === "admin") {
       return true
     }
+
     // Directors can take action on requests assigned to them or targeting their department
     if (userRole === "director") {
       const isAssigned = request.assignedDirectors.some(
@@ -264,17 +250,44 @@ export default function RequestInboxPage() {
       const isDepartmentTarget = request.targetDepartments.some((dept) => dept._id === userDepartmentId)
       return isAssigned || isDepartmentTarget
     }
+
     // Department users can take action on requests targeting their department
     if (userRole === "department") {
       const isDepartmentTarget = request.targetDepartments.some((dept) => dept._id === userDepartmentId)
+
       if (!isDepartmentTarget) return false
+
       // Check if this department has already taken action
       const departmentApproval = request.departmentApprovals.find(
         (approval) => approval.department._id === userDepartmentId,
       )
+
       return !departmentApproval || departmentApproval.status.toLowerCase() === "pending"
     }
+
     return false
+  }
+
+  // Helper function to check if request needs signature (for filtering)
+  const requestNeedsSignature = (request: ReceivedRequest): boolean => {
+    return request.requiresSignature === true && !request.signatureProvided
+  }
+
+  // Helper function to check if request is actionable (for filtering)
+  const requestIsActionable = (request: ReceivedRequest): boolean => {
+    const requestStatus = request.status.toLowerCase()
+    return !["approved", "rejected", "completed"].includes(requestStatus)
+  }
+
+  // Helper function to show signature option in dropdown (always show if request requires signature)
+  const shouldShowSignatureOption = (request: ReceivedRequest): boolean => {
+    return request.requiresSignature === true
+  }
+
+  // Helper function to show action option in dropdown (always show if request is actionable)
+  const shouldShowActionOption = (request: ReceivedRequest): boolean => {
+    const requestStatus = request.status.toLowerCase()
+    return !["approved", "rejected", "completed"].includes(requestStatus)
   }
 
   // Get theme colors based on user role
@@ -354,6 +367,7 @@ export default function RequestInboxPage() {
         }
     }
   }
+
   const themeColors = getThemeColor()
 
   // Fetch received requests
@@ -361,8 +375,7 @@ export default function RequestInboxPage() {
     const fetchReceivedRequests = async () => {
       try {
         setLoading(true)
-        // Changed to fetch reviewed requests
-        const response = await api.getReviewedRequests(authContext)
+        const response = await api.getIncomingRequests(authContext)
         if (response.success && response.data) {
           console.log("Fetched requests:", response.data.requests) // Debug log
           setReceivedRequests(response.data.requests || [])
@@ -393,6 +406,7 @@ export default function RequestInboxPage() {
         request.createdBy.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         request.targetDepartments.some((dept) => dept.name.toLowerCase().includes(searchTerm.toLowerCase())),
     )
+
     if (filterStatus !== "all") {
       if (filterStatus === "urgent") {
         filtered = filtered.filter((request) => request.isUrgent || request.priority.toLowerCase() === "urgent")
@@ -402,11 +416,23 @@ export default function RequestInboxPage() {
         filtered = filtered.filter((request) => requestIsActionable(request))
       }
     }
+
     setFilteredRequests(filtered)
   }, [receivedRequests, searchTerm, filterStatus, authContext.user])
 
   const handleRequestAction = async (action: "approve" | "reject" | "sendback") => {
     if (!selectedRequest) return
+
+    // Check if user can actually take action
+    // if (!canUserTakeAction(selectedRequest)) {
+    //   toast({
+    //     title: "Action not allowed",
+    //     description: "You don't have permission to take action on this request",
+    //     variant: "destructive",
+    //   })
+    //   return
+    // }
+
     if (!actionComment.trim() && action !== "approve") {
       toast({
         title: "Comment required",
@@ -415,6 +441,7 @@ export default function RequestInboxPage() {
       })
       return
     }
+
     setIsProcessing(true)
     try {
       const actionData = {
@@ -422,6 +449,7 @@ export default function RequestInboxPage() {
         comment: actionComment,
         requireSignature: requireSignature,
       }
+
       const response = await api.takeRequestAction(selectedRequest._id, actionData, authContext)
       if (response.success) {
         // Remove the request from the list or update its status
@@ -457,6 +485,17 @@ export default function RequestInboxPage() {
       })
       return
     }
+
+    // Check if user can actually sign
+    // if (!canUserSign(selectedRequest)) {
+    //   toast({
+    //     title: "Signature not allowed",
+    //     description: "You don't have permission to sign this request",
+    //     variant: "destructive",
+    //   })
+    //   return
+    // }
+
     setIsProcessing(true)
     try {
       const response = await api.submitSignature(selectedRequest._id, { signatureData }, authContext)
@@ -469,16 +508,13 @@ export default function RequestInboxPage() {
               : req,
           ),
         )
+        setSelectedRequest(null)
         setSignatureData("")
-        setIsSignatureDialogOpen(false) // Close signature dialog
+        setIsSignatureDialogOpen(false)
         toast({
           title: "Signature submitted successfully",
           description: `Your signature has been added to ${selectedRequest.title}`,
         })
-        // Open action dialog after successful signature submission
-        if (selectedRequest) {
-          openActionDialog(selectedRequest)
-        }
       } else {
         throw new Error(response.error || "Failed to submit signature")
       }
@@ -545,6 +581,7 @@ export default function RequestInboxPage() {
   const getRelativeTime = (date: Date) => {
     const now = new Date()
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+
     if (diffInSeconds < 60) return "Just now"
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
@@ -644,6 +681,7 @@ export default function RequestInboxPage() {
       actionable: receivedRequests.filter((r) => requestIsActionable(r)).length,
     }
   }
+
   const statusCounts = getStatusCounts()
 
   const RequestCard = ({ request }: { request: ReceivedRequest }) => {
@@ -651,146 +689,131 @@ export default function RequestInboxPage() {
     const userCanTakeAction = canUserTakeAction(request)
     const showSignatureOption = shouldShowSignatureOption(request)
     const showActionOption = shouldShowActionOption(request)
+
     return (
-      <Card className="group hover:shadow-2xl transition-all duration-500 h-fit bg-gradient-to-br from-white via-slate-50/50 to-white border-0 shadow-lg relative overflow-hidden backdrop-blur-sm">
-        {/* Animated background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-        {/* Priority indicator */}
-        {request.priority.toLowerCase() === "urgent" && (
-          <div className="absolute top-0 right-0 w-0 h-0 border-l-[40px] border-l-transparent border-t-[40px] border-t-red-500">
-            <Zap className="absolute -top-8 -right-2 w-4 h-4 text-white animate-pulse" />
-          </div>
-        )}
-        <CardContent className="p-6 lg:p-8 relative z-10">
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start space-x-4 flex-1 min-w-0">
-                <div
-                  className={`p-3 rounded-2xl ${themeColors.iconBg} shadow-lg group-hover:scale-110 transition-transform duration-300`}
-                >
-                  <MessageSquare className={`w-6 h-6 ${themeColors.iconColor}`} />
+      <Card className="hover:shadow-2xl transition-all duration-300 h-fit bg-gradient-to-br from-white to-slate-50 border-0 shadow-lg relative overflow-hidden group">
+        <div
+          className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${themeColors.gradient} rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-300 transform translate-x-16 -translate-y-16`}
+        ></div>
+        <CardContent className="p-4 sm:p-6 lg:p-8">
+          <div className="space-y-4 sm:space-y-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start space-x-3 sm:space-x-4 flex-1 min-w-0">
+                <div className={`p-2 sm:p-3 rounded-xl sm:rounded-2xl ${themeColors.iconBg} flex-shrink-0 shadow-md`}>
+                  <MessageSquare className={`w-4 h-4 sm:w-6 sm:h-6 ${themeColors.iconColor}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start gap-3 mb-3">
-                    <h3 className="text-xl font-bold text-slate-800 line-clamp-2 flex-1 group-hover:text-slate-900 transition-colors">
-                      {request.title}
-                    </h3>
+                  <div className="flex items-start gap-2 mb-2">
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-800 line-clamp-2 flex-1">{request.title}</h3>
                     {request.isUrgent && (
-                      <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse shadow-sm">
+                      <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse flex-shrink-0">
                         <Zap className="w-3 h-3 mr-1" />
                         Urgent
                       </Badge>
                     )}
                   </div>
-                  <p className="text-slate-600 text-base line-clamp-3 leading-relaxed mb-4 group-hover:text-slate-700 transition-colors">
+                  <p className="text-slate-600 text-sm sm:text-base line-clamp-3 leading-relaxed mb-3">
                     {request.description}
                   </p>
-                  {/* Request metadata */}
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-3 text-slate-600 group-hover:text-slate-700 transition-colors">
-                      <User className="w-5 h-5 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2 sm:space-x-3 text-slate-600">
+                      <User className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                      <span className="text-sm sm:text-base truncate">
                         From: {request.createdBy.firstName} {request.createdBy.lastName}
                       </span>
                     </div>
-                    <div className="flex items-center space-x-3 text-slate-600 group-hover:text-slate-700 transition-colors">
-                      <Calendar className="w-5 h-5 flex-shrink-0" />
-                      <span className="text-sm">{formatDateTime(request.createdAt).relative}</span>
+                    <div className="flex items-center space-x-2 sm:space-x-3 text-slate-600">
+                      <Calendar className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                      <span className="text-sm sm:text-base">{formatDateTime(request.createdAt).relative}</span>
                     </div>
-                    <div className="flex items-center space-x-3 text-slate-600 group-hover:text-slate-700 transition-colors">
-                      <Users className="w-5 h-5 flex-shrink-0" />
-                      <span className="text-sm">
+                    <div className="flex items-center space-x-2 sm:space-x-3 text-slate-600">
+                      <Users className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                      <span className="text-sm sm:text-base">
                         {request.targetDepartments.length} department{request.targetDepartments.length !== 1 ? "s" : ""}
                       </span>
                     </div>
-                    {request.assignedDirectors.length > 0 && request.assignedDirectors[0].director && (
-                      <div className="flex items-center space-x-3 text-slate-600 group-hover:text-slate-700 transition-colors">
-                        <Building2 className="w-5 h-5 flex-shrink-0" />
-                        <span className="text-sm">
-                          Director: {request.assignedDirectors[0].director.firstName}{" "}
-                          {request.assignedDirectors[0].director.lastName}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
-              {/* Actions dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
                     size="icon"
-                    className="flex-shrink-0 hover:shadow-lg transition-all duration-300 border-2 bg-white/80 backdrop-blur-sm h-10 w-10 group-hover:border-slate-300"
+                    className="flex-shrink-0 hover:shadow-lg transition-shadow border-2 bg-transparent h-8 w-8 sm:h-10 sm:w-10"
                   >
-                    <MoreHorizontal className="w-5 h-5" />
+                    <MoreHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 shadow-xl border-0 bg-white/95 backdrop-blur-sm">
+                <DropdownMenuContent align="end" className="w-48">
                   <DropdownMenuItem
                     onClick={() => openViewDialog(request)}
-                    className="text-base py-3 hover:bg-slate-50 transition-colors"
+                    className="text-sm sm:text-base py-2 sm:py-3"
                   >
-                    <Eye className="w-5 h-5 mr-3" />
+                    <Eye className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />
                     View Details
                   </DropdownMenuItem>
                   {showSignatureOption && (
                     <DropdownMenuItem
                       onClick={() => openSignatureDialog(request)}
-                      className="text-base py-3 hover:bg-blue-50 transition-colors"
+                      className="text-sm sm:text-base py-2 sm:py-3"
                     >
-                      <PenTool className="w-5 h-5 mr-3" />
+                      <PenTool className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />
                       Add Signature
                     </DropdownMenuItem>
                   )}
                   {showActionOption && (
                     <DropdownMenuItem
                       onClick={() => openActionDialog(request)}
-                      className="text-base py-3 hover:bg-green-50 transition-colors"
+                      className="text-sm sm:text-base py-2 sm:py-3"
                     >
-                      <Settings className="w-5 h-5 mr-3" />
+                      <Settings className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />
                       Take Action
                     </DropdownMenuItem>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            {/* Status badges */}
-            <div className="flex flex-wrap gap-3">
-              <Badge className={`${getStatusColor(request.status)} border text-sm px-4 py-2 font-medium shadow-sm`}>
+
+            <div className="flex flex-wrap gap-2 sm:gap-3">
+              <Badge
+                className={`${getStatusColor(request.status)} border text-xs sm:text-sm px-2 sm:px-4 py-1 sm:py-2 font-medium shadow-sm`}
+              >
                 {request.status}
               </Badge>
-              <Badge className={`${getPriorityColor(request.priority)} border text-sm px-4 py-2 font-medium shadow-sm`}>
+              <Badge
+                className={`${getPriorityColor(request.priority)} border text-xs sm:text-sm px-2 sm:px-4 py-1 sm:py-2 font-medium shadow-sm`}
+              >
                 {request.priority.charAt(0).toUpperCase() + request.priority.slice(1)}
               </Badge>
-              <Badge className="bg-gradient-to-r from-slate-100 to-gray-100 text-slate-700 border border-slate-200 text-sm px-4 py-2 font-medium shadow-sm">
+              <Badge className="bg-gradient-to-r from-slate-100 to-gray-100 text-slate-700 border border-slate-200 text-xs sm:text-sm px-2 sm:px-4 py-1 sm:py-2 font-medium shadow-sm">
                 {request.category}
               </Badge>
               {userCanSign && (
-                <Badge className="bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border-blue-200 text-sm px-4 py-2 font-medium shadow-sm animate-pulse">
-                  <PenTool className="w-4 h-4 mr-1" />
+                <Badge className="bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border-blue-200 text-xs sm:text-sm px-2 sm:px-4 py-1 sm:py-2 font-medium shadow-sm animate-pulse">
+                  <PenTool className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                   Needs My Signature
                 </Badge>
               )}
               {userCanTakeAction && (
-                <Badge className="bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border-green-200 text-sm px-4 py-2 font-medium shadow-sm animate-pulse">
-                  <Star className="w-4 h-4 mr-1" />
+                <Badge className="bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border-green-200 text-xs sm:text-sm px-2 sm:px-4 py-1 sm:py-2 font-medium shadow-sm animate-pulse">
+                  <Star className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                   Action Required
                 </Badge>
               )}
             </div>
-            {/* Additional info */}
+
             {request.attachments && request.attachments.length > 0 && (
-              <div className="flex items-center space-x-3 text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <Paperclip className="w-5 h-5 flex-shrink-0" />
-                <span className="text-sm font-medium">{request.attachments.length} attachment(s)</span>
+              <div className="flex items-center space-x-2 sm:space-x-3 text-slate-600 bg-slate-50 p-2 sm:p-3 rounded-lg sm:rounded-xl">
+                <Paperclip className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                <span className="text-sm sm:text-base font-medium">{request.attachments.length} attachment(s)</span>
               </div>
             )}
+
             {request.dueDate && (
-              <div className="flex items-center space-x-3 text-slate-600 bg-amber-50 p-4 rounded-xl border border-amber-200">
-                <Clock className="w-5 h-5 flex-shrink-0" />
-                <span className="text-sm font-medium">Due: {new Date(request.dueDate).toLocaleDateString()}</span>
+              <div className="flex items-center space-x-2 sm:space-x-3 text-slate-600 bg-amber-50 p-2 sm:p-3 rounded-lg border border-amber-200">
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                <span className="text-sm sm:text-base">Due: {new Date(request.dueDate).toLocaleDateString()}</span>
               </div>
             )}
           </div>
@@ -804,42 +827,39 @@ export default function RequestInboxPage() {
     const userCanTakeAction = canUserTakeAction(request)
     const showSignatureOption = shouldShowSignatureOption(request)
     const showActionOption = shouldShowActionOption(request)
+
     return (
-      <div className="group flex items-center justify-between p-6 border border-slate-200 rounded-2xl hover:bg-gradient-to-r hover:from-slate-50 hover:to-white transition-all duration-300 hover:shadow-lg hover:border-slate-300">
-        <div className="flex items-center space-x-4 flex-1 min-w-0">
-          <div
-            className={`p-3 rounded-xl ${themeColors.iconBg} group-hover:scale-110 transition-transform duration-300`}
-          >
-            <MessageSquare className={`w-5 h-5 ${themeColors.iconColor}`} />
+      <div className="flex items-center justify-between p-3 sm:p-4 border rounded-lg hover:bg-slate-50 transition-colors">
+        <div className="flex items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
+          <div className={`p-2 rounded-xl ${themeColors.iconBg}`}>
+            <MessageSquare className={`w-4 h-4 ${themeColors.iconColor}`} />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center space-x-3 mb-2">
-              <h3 className="font-semibold text-slate-800 truncate text-base group-hover:text-slate-900 transition-colors">
-                {request.title}
-              </h3>
-              <Badge className={`${getPriorityColor(request.priority)} text-xs px-3 py-1 shadow-sm`}>
+            <div className="flex items-center space-x-2 sm:space-x-3 mb-1">
+              <h3 className="font-medium text-slate-800 truncate text-sm sm:text-base">{request.title}</h3>
+              <Badge className={`${getPriorityColor(request.priority)} text-xs px-2 py-1`}>
                 {request.priority.charAt(0).toUpperCase() + request.priority.slice(1)}
               </Badge>
               {request.isUrgent && (
-                <Badge className="bg-red-100 text-red-800 text-xs px-3 py-1 animate-pulse shadow-sm">
+                <Badge className="bg-red-100 text-red-800 text-xs px-2 py-1 animate-pulse">
                   <Zap className="w-3 h-3 mr-1" />
                   Urgent
                 </Badge>
               )}
               {userCanSign && (
-                <Badge className="bg-blue-100 text-blue-800 text-xs px-3 py-1 animate-pulse shadow-sm">
+                <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-1 animate-pulse">
                   <PenTool className="w-3 h-3 mr-1" />
                   Signature
                 </Badge>
               )}
               {userCanTakeAction && (
-                <Badge className="bg-green-100 text-green-800 text-xs px-3 py-1 animate-pulse shadow-sm">
+                <Badge className="bg-green-100 text-green-800 text-xs px-2 py-1 animate-pulse">
                   <Star className="w-3 h-3 mr-1" />
                   Action
                 </Badge>
               )}
             </div>
-            <div className="flex items-center space-x-4 text-sm text-slate-600 group-hover:text-slate-700 transition-colors">
+            <div className="flex items-center space-x-3 sm:space-x-4 text-xs sm:text-sm text-slate-600">
               <span>
                 From: {request.createdBy.firstName} {request.createdBy.lastName}
               </span>
@@ -855,23 +875,23 @@ export default function RequestInboxPage() {
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-slate-100 transition-colors">
+            <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-10 sm:w-10">
               <MoreHorizontal className="w-4 h-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="shadow-xl border-0 bg-white/95 backdrop-blur-sm">
-            <DropdownMenuItem onClick={() => openViewDialog(request)} className="hover:bg-slate-50">
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => openViewDialog(request)}>
               <Eye className="w-4 h-4 mr-2" />
               View Details
             </DropdownMenuItem>
             {showSignatureOption && (
-              <DropdownMenuItem onClick={() => openSignatureDialog(request)} className="hover:bg-blue-50">
+              <DropdownMenuItem onClick={() => openSignatureDialog(request)}>
                 <PenTool className="w-4 h-4 mr-2" />
                 Add Signature
               </DropdownMenuItem>
             )}
             {showActionOption && (
-              <DropdownMenuItem onClick={() => openActionDialog(request)} className="hover:bg-green-50">
+              <DropdownMenuItem onClick={() => openActionDialog(request)}>
                 <Settings className="w-4 h-4 mr-2" />
                 Take Action
               </DropdownMenuItem>
@@ -884,16 +904,15 @@ export default function RequestInboxPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
         <div className="text-center">
           <div className="relative">
-            <Loader2 className={`h-16 w-16 animate-spin mx-auto mb-6 ${themeColors.iconColor}`} />
+            <Loader2 className={`h-12 w-12 animate-spin mx-auto mb-4 ${themeColors.iconColor}`} />
             <div
-              className={`absolute inset-0 h-16 w-16 mx-auto rounded-full ${themeColors.primary} opacity-20 animate-pulse`}
-            />
+              className={`absolute inset-0 h-12 w-12 mx-auto rounded-full ${themeColors.primary} opacity-20 animate-pulse`}
+            ></div>
           </div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">Loading Your Inbox</h2>
-          <p className="text-slate-600 text-lg">Fetching your requests...</p>
+          <span className="text-slate-600 text-lg sm:text-xl">Loading requests...</span>
         </div>
       </div>
     )
@@ -903,103 +922,108 @@ export default function RequestInboxPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 relative overflow-hidden">
       {/* Floating decorative elements */}
       <div
-        className={`absolute top-20 left-10 w-32 h-32 bg-gradient-to-br ${themeColors.gradient} rounded-full opacity-10 animate-float`}
-      />
-      <div className="absolute top-40 right-20 w-24 h-24 bg-gradient-to-br from-blue-200 to-indigo-200 rounded-full opacity-10 animate-float-delayed" />
-      <div className="absolute bottom-20 left-1/4 w-20 h-20 bg-gradient-to-br from-purple-200 to-pink-200 rounded-full opacity-10 animate-float" />
-      <div className="relative z-10 space-y-8 px-4 sm:px-6 lg:px-8 py-8">
+        className={`absolute top-20 left-10 w-20 h-20 bg-gradient-to-br ${themeColors.gradient} rounded-full opacity-10 animate-float`}
+      ></div>
+      <div className="absolute top-40 right-20 w-16 h-16 bg-gradient-to-br from-blue-200 to-indigo-200 rounded-full opacity-10 animate-float-delayed"></div>
+
+      <div className="relative z-10 space-y-6 sm:space-y-8 px-4 sm:px-6 py-6 sm:py-8">
         {/* Enhanced Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="space-y-3">
-            <div className="flex items-center space-x-4">
-              <div className={`p-4 rounded-2xl ${themeColors.primary} shadow-2xl`}>
-                <Inbox className="w-8 h-8 text-white" />
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-0">
+          <div className="space-y-2">
+            <div className="flex items-center space-x-3 sm:space-x-4">
+              <div className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl ${themeColors.primary} shadow-xl`}>
+                <Inbox className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
               </div>
               <div>
-                <h1 className="text-5xl font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 bg-clip-text text-transparent">
-                  Request Review Inbox
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 bg-clip-text text-transparent">
+                  Request Inbox
                 </h1>
-                <p className="text-slate-600 text-xl mt-2">Review and process incoming requests</p>
+                <p className="text-slate-600 text-base sm:text-lg lg:text-xl mt-1 sm:mt-2">
+                  Review and process incoming requests
+                </p>
               </div>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-            <Badge variant="outline" className={`${themeColors.badge} text-base px-4 py-2 font-medium shadow-lg`}>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+            <Badge
+              variant="outline"
+              className={`${themeColors.badge} text-sm sm:text-base px-3 sm:px-4 py-2 font-medium w-fit`}
+            >
               {filteredRequests.length} Pending
             </Badge>
-            <div className="flex items-center space-x-2 border-2 border-slate-200 rounded-2xl p-2 bg-white/80 backdrop-blur-sm shadow-lg">
+            <div className="flex items-center space-x-2 border-2 border-slate-200 rounded-xl sm:rounded-2xl p-1 sm:p-2 bg-white shadow-lg">
               <Button
                 variant={viewMode === "card" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setViewMode("card")}
-                className={viewMode === "card" ? `${themeColors.primary} text-white shadow-lg` : "hover:bg-slate-100"}
+                className={viewMode === "card" ? `${themeColors.primary} text-white shadow-lg` : ""}
               >
-                <Grid3X3 className="w-5 h-5" />
-                <span className="ml-2 hidden sm:inline">Cards</span>
+                <Grid3X3 className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="ml-1 sm:ml-2 hidden sm:inline">Cards</span>
               </Button>
               <Button
                 variant={viewMode === "list" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setViewMode("list")}
-                className={viewMode === "list" ? `${themeColors.primary} text-white shadow-lg` : "hover:bg-slate-100"}
+                className={viewMode === "list" ? `${themeColors.primary} text-white shadow-lg` : ""}
               >
-                <List className="w-5 h-5" />
-                <span className="ml-2 hidden sm:inline">List</span>
+                <List className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="ml-1 sm:ml-2 hidden sm:inline">List</span>
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="bg-gradient-to-br from-blue-50 via-blue-50/50 to-white border-0 shadow-xl hover:shadow-2xl transition-all duration-300 group">
-            <CardContent className="p-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-0 shadow-lg hover:shadow-xl transition-shadow">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-blue-600 text-sm font-medium mb-1">Total Requests</p>
-                  <p className="text-3xl font-bold text-blue-800">{statusCounts.all}</p>
+                  <p className="text-blue-600 text-xs sm:text-sm font-medium">Total Requests</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-blue-800">{statusCounts.all}</p>
                 </div>
-                <div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-2xl group-hover:scale-110 transition-transform duration-300">
-                  <Inbox className="w-6 h-6 text-blue-600" />
+                <div className="p-2 sm:p-3 bg-blue-100 rounded-xl sm:rounded-2xl">
+                  <Inbox className="w-4 h-4 sm:w-6 sm:h-6 text-blue-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-red-50 via-red-50/50 to-white border-0 shadow-xl hover:shadow-2xl transition-all duration-300 group">
-            <CardContent className="p-6">
+          <Card className="bg-gradient-to-br from-red-50 to-rose-50 border-0 shadow-lg hover:shadow-xl transition-shadow">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-red-600 text-sm font-medium mb-1">Urgent</p>
-                  <p className="text-3xl font-bold text-red-800">{statusCounts.urgent}</p>
+                  <p className="text-red-600 text-xs sm:text-sm font-medium">Urgent</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-red-800">{statusCounts.urgent}</p>
                 </div>
-                <div className="p-3 bg-gradient-to-br from-red-100 to-rose-100 rounded-2xl group-hover:scale-110 transition-transform duration-300">
-                  <Zap className="w-6 h-6 text-red-600" />
+                <div className="p-2 sm:p-3 bg-red-100 rounded-xl sm:rounded-2xl">
+                  <Zap className="w-4 h-4 sm:w-6 sm:h-6 text-red-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-blue-50 via-blue-50/50 to-white border-0 shadow-xl hover:shadow-2xl transition-all duration-300 group">
-            <CardContent className="p-6">
+          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-0 shadow-lg hover:shadow-xl transition-shadow">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-blue-600 text-sm font-medium mb-1">Need Signature</p>
-                  <p className="text-3xl font-bold text-blue-800">{statusCounts.signature}</p>
+                  <p className="text-blue-600 text-xs sm:text-sm font-medium">Need Signature</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-blue-800">{statusCounts.signature}</p>
                 </div>
-                <div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-2xl group-hover:scale-110 transition-transform duration-300">
-                  <PenTool className="w-6 h-6 text-blue-600" />
+                <div className="p-2 sm:p-3 bg-blue-100 rounded-xl sm:rounded-2xl">
+                  <PenTool className="w-4 h-4 sm:w-6 sm:h-6 text-blue-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-green-50 via-green-50/50 to-white border-0 shadow-xl hover:shadow-2xl transition-all duration-300 group">
-            <CardContent className="p-6">
+          <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-0 shadow-lg hover:shadow-xl transition-shadow">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-green-600 text-sm font-medium mb-1">Actionable</p>
-                  <p className="text-3xl font-bold text-green-800">{statusCounts.actionable}</p>
+                  <p className="text-green-600 text-xs sm:text-sm font-medium">Actionable</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-green-800">{statusCounts.actionable}</p>
                 </div>
-                <div className="p-3 bg-gradient-to-br from-green-100 to-emerald-100 rounded-2xl group-hover:scale-110 transition-transform duration-300">
-                  <Star className="w-6 h-6 text-green-600" />
+                <div className="p-2 sm:p-3 bg-green-100 rounded-xl sm:rounded-2xl">
+                  <Star className="w-4 h-4 sm:w-6 sm:h-6 text-green-600" />
                 </div>
               </div>
             </CardContent>
@@ -1007,43 +1031,39 @@ export default function RequestInboxPage() {
         </div>
 
         {/* Enhanced Search and Filters */}
-        <Card className="border-0 shadow-2xl bg-gradient-to-r from-white via-slate-50/50 to-white backdrop-blur-sm">
-          <CardContent className="p-8">
-            <div className="space-y-6">
+        <Card className="border-0 shadow-xl bg-gradient-to-r from-white to-slate-50">
+          <CardContent className="p-4 sm:p-8">
+            <div className="space-y-4">
               <div className="relative max-w-2xl mx-auto">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-6 h-6" />
+                <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5 sm:w-6 sm:h-6" />
                 <Input
                   placeholder="Search requests by title, description, or submitter..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className={`pl-14 h-14 text-lg border-2 border-slate-200 rounded-2xl bg-white/80 backdrop-blur-sm shadow-inner ${themeColors.focus} transition-all duration-300`}
+                  className={`pl-10 sm:pl-14 h-12 sm:h-14 text-base sm:text-lg border-2 border-slate-200 rounded-xl sm:rounded-2xl bg-white shadow-inner ${themeColors.focus}`}
                 />
               </div>
-              <div className="flex flex-wrap justify-center gap-3">
+              <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
                 {[
-                  { key: "all", label: "All", count: statusCounts.all, icon: Filter },
-                  { key: "urgent", label: "Urgent", count: statusCounts.urgent, icon: Zap },
-                  { key: "signature", label: "Need Signature", count: statusCounts.signature, icon: PenTool },
-                  { key: "actionable", label: "Actionable", count: statusCounts.actionable, icon: Star },
-                ].map((filter) => {
-                  const IconComponent = filter.icon
-                  return (
-                    <Button
-                      key={filter.key}
-                      variant={filterStatus === filter.key ? "default" : "outline"}
-                      size="lg"
-                      onClick={() => setFilterStatus(filter.key)}
-                      className={
-                        filterStatus === filter.key
-                          ? `${themeColors.primary} text-white shadow-xl hover:shadow-2xl transition-all duration-300`
-                          : `${themeColors.buttonOutline} hover:shadow-lg transition-all duration-300`
-                      }
-                    >
-                      <IconComponent className="w-4 h-4 mr-2" />
-                      {filter.label} ({filter.count})
-                    </Button>
-                  )
-                })}
+                  { key: "all", label: "All", count: statusCounts.all },
+                  { key: "urgent", label: "Urgent", count: statusCounts.urgent },
+                  { key: "signature", label: "Need Signature", count: statusCounts.signature },
+                  { key: "actionable", label: "Actionable", count: statusCounts.actionable },
+                ].map((filter) => (
+                  <Button
+                    key={filter.key}
+                    variant={filterStatus === filter.key ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFilterStatus(filter.key)}
+                    className={
+                      filterStatus === filter.key
+                        ? `${themeColors.primary} text-white shadow-lg`
+                        : `${themeColors.buttonOutline}`
+                    }
+                  >
+                    {filter.label} ({filter.count})
+                  </Button>
+                ))}
               </div>
             </div>
           </CardContent>
@@ -1051,17 +1071,17 @@ export default function RequestInboxPage() {
 
         {/* Requests Display */}
         {filteredRequests.length === 0 ? (
-          <Card className="border-0 shadow-2xl bg-gradient-to-br from-white via-slate-50/50 to-white">
-            <CardContent className="p-16 text-center">
-              <div className="space-y-6">
-                <div className="p-6 bg-gradient-to-br from-slate-100 to-gray-100 rounded-full w-fit mx-auto">
-                  <Inbox className="w-16 h-16 text-slate-400" />
+          <Card className="border-0 shadow-xl bg-gradient-to-br from-white to-slate-50">
+            <CardContent className="p-8 sm:p-16 text-center">
+              <div className="space-y-4 sm:space-y-6">
+                <div className="p-4 sm:p-6 bg-gradient-to-br from-slate-100 to-gray-100 rounded-full w-fit mx-auto">
+                  <Inbox className="w-12 h-12 sm:w-16 sm:h-16 text-slate-400" />
                 </div>
-                <div className="space-y-3">
-                  <h3 className="text-2xl font-bold text-slate-800">
+                <div className="space-y-2 sm:space-y-3">
+                  <h3 className="text-xl sm:text-2xl font-bold text-slate-800">
                     {searchTerm || filterStatus !== "all" ? "No matching requests" : "No pending requests"}
                   </h3>
-                  <p className="text-slate-600 text-lg max-w-md mx-auto">
+                  <p className="text-slate-600 text-base sm:text-lg max-w-md mx-auto">
                     {searchTerm || filterStatus !== "all"
                       ? "Try adjusting your search or filter criteria"
                       : "All requests have been reviewed and processed"}
@@ -1071,7 +1091,13 @@ export default function RequestInboxPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className={viewMode === "card" ? "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8" : "space-y-4"}>
+          <div
+            className={
+              viewMode === "card"
+                ? "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 lg:gap-8"
+                : "space-y-2 sm:space-y-4"
+            }
+          >
             {filteredRequests.map((request) =>
               viewMode === "card" ? (
                 <RequestCard key={request._id} request={request} />
@@ -1084,12 +1110,12 @@ export default function RequestInboxPage() {
 
         {/* View Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto border-0 shadow-2xl bg-white/95 backdrop-blur-sm">
-            <DialogHeader className="pb-6">
-              <DialogTitle className="flex flex-col sm:flex-row sm:items-center gap-3 text-2xl">
-                <div className="flex items-center gap-3">
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto border-0 shadow-2xl">
+            <DialogHeader className="pb-4 sm:pb-6">
+              <DialogTitle className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-xl sm:text-2xl">
+                <div className="flex items-center gap-2 sm:gap-3">
                   <div className={`p-2 ${themeColors.iconBg} rounded-xl`}>
-                    <MessageSquare className={`w-6 h-6 ${themeColors.iconColor}`} />
+                    <MessageSquare className={`w-5 h-5 sm:w-6 sm:h-6 ${themeColors.iconColor}`} />
                   </div>
                   <span className="break-words">Request Details</span>
                 </div>
@@ -1100,84 +1126,62 @@ export default function RequestInboxPage() {
                   </Badge>
                 )}
               </DialogTitle>
-              <DialogDescription className="text-lg">Complete information about this request</DialogDescription>
+              <DialogDescription className="text-base sm:text-lg">
+                Complete information about this request
+              </DialogDescription>
             </DialogHeader>
             {selectedRequest && (
-              <div className="space-y-8">
+              <div className="space-y-6 sm:space-y-8">
                 {/* Request Overview */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-6 bg-gradient-to-r from-slate-50 to-gray-50 rounded-2xl">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 p-4 sm:p-6 bg-gradient-to-r from-slate-50 to-gray-50 rounded-xl sm:rounded-2xl">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-slate-600">Title</Label>
-                    <p className="text-slate-800 font-semibold text-lg break-words">{selectedRequest.title}</p>
+                    <p className="text-slate-800 font-semibold text-base sm:text-lg break-words">
+                      {selectedRequest.title}
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-slate-600">Category</Label>
-                    <p className="text-slate-800 capitalize text-lg font-semibold">{selectedRequest.category}</p>
+                    <p className="text-slate-800 capitalize text-base sm:text-lg font-semibold">
+                      {selectedRequest.category}
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-slate-600">Priority</Label>
-                    <Badge className={`${getPriorityColor(selectedRequest.priority)} border text-base px-4 py-2`}>
+                    <Badge
+                      className={`${getPriorityColor(selectedRequest.priority)} border text-sm sm:text-base px-3 sm:px-4 py-1 sm:py-2`}
+                    >
                       {selectedRequest.priority}
                     </Badge>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-slate-600">Status</Label>
-                    <Badge className={`${getStatusColor(selectedRequest.status)} border text-base px-4 py-2`}>
+                    <Badge
+                      className={`${getStatusColor(selectedRequest.status)} border text-sm sm:text-base px-3 sm:px-4 py-1 sm:py-2`}
+                    >
                       {selectedRequest.status}
                     </Badge>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-slate-600">Submitted By</Label>
-                    <p className="text-slate-800 font-medium text-base">
+                    <p className="text-slate-800 font-medium text-sm sm:text-base">
                       {selectedRequest.createdBy.firstName} {selectedRequest.createdBy.lastName}
                     </p>
-                    <p className="text-slate-600 text-sm">{selectedRequest.createdBy.email}</p>
+                    <p className="text-slate-600 text-xs sm:text-sm">{selectedRequest.createdBy.email}</p>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-slate-600">Created</Label>
-                    <p className="text-slate-800 font-medium text-base">
+                    <p className="text-slate-800 font-medium text-sm sm:text-base">
                       {formatDateTime(selectedRequest.createdAt).date} at{" "}
                       {formatDateTime(selectedRequest.createdAt).time}
                     </p>
                   </div>
                 </div>
 
-                {/* Assigned Director */}
-                {selectedRequest.assignedDirectors && selectedRequest.assignedDirectors.length > 0 && (
-                  <div className="space-y-3">
-                    <Label className="text-lg font-semibold text-slate-800">Assigned Director</Label>
-                    {selectedRequest.assignedDirectors.map((assignment, index) => (
-                      <div key={index} className="p-4 bg-slate-50 rounded-xl border flex items-center gap-4">
-                        <Avatar className="h-12 w-12">
-                          <AvatarImage src={assignment.director?.avatar || "/placeholder.svg"} />
-                          <AvatarFallback>
-                            {assignment.director?.firstName?.[0]}
-                            {assignment.director?.lastName?.[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium text-slate-800 text-base">
-                            {assignment.director?.firstName} {assignment.director?.lastName}
-                          </p>
-                          <p className="text-slate-600 text-sm">{assignment.director?.email}</p>
-                          {assignment.department && (
-                            <Badge variant="secondary" className="mt-1 text-xs">
-                              {assignment.department.name}
-                            </Badge>
-                          )}
-                          <Badge className={`ml-2 ${getStatusColor(assignment.status)} text-xs px-2 py-1`}>
-                            {assignment.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
                 {/* Description */}
                 <div className="space-y-3">
                   <Label className="text-lg font-semibold text-slate-800">Description</Label>
-                  <div className="p-6 bg-slate-50 rounded-xl border">
+                  <div className="p-4 sm:p-6 bg-slate-50 rounded-xl border">
                     <p className="text-slate-700 leading-relaxed whitespace-pre-wrap break-words">
                       {selectedRequest.description}
                     </p>
@@ -1189,12 +1193,12 @@ export default function RequestInboxPage() {
                   <Label className="text-lg font-semibold text-slate-800">Target Departments</Label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {selectedRequest.targetDepartments.map((dept) => (
-                      <div key={dept._id} className="p-4 bg-slate-50 rounded-xl border">
+                      <div key={dept._id} className="p-3 sm:p-4 bg-slate-50 rounded-xl border">
                         <div className="flex items-center space-x-2">
-                          <Building2 className={`w-5 h-5 ${themeColors.iconColor}`} />
-                          <span className="font-medium text-slate-800 text-base">{dept.name}</span>
+                          <Building2 className={`w-4 h-4 sm:w-5 sm:h-5 ${themeColors.iconColor}`} />
+                          <span className="font-medium text-slate-800 text-sm sm:text-base">{dept.name}</span>
                         </div>
-                        <p className="text-slate-600 text-sm mt-1">{dept.description}</p>
+                        <p className="text-slate-600 text-xs sm:text-sm mt-1">{dept.description}</p>
                       </div>
                     ))}
                   </div>
@@ -1206,13 +1210,15 @@ export default function RequestInboxPage() {
                     <Label className="text-lg font-semibold text-slate-800">Attachments</Label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {selectedRequest.attachments.map((attachment, index) => (
-                        <div key={index} className="p-4 bg-slate-50 rounded-xl border">
+                        <div key={index} className="p-3 sm:p-4 bg-slate-50 rounded-xl border">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3 min-w-0 flex-1">
-                              <FileText className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                              <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 flex-shrink-0" />
                               <div className="min-w-0 flex-1">
-                                <p className="font-medium text-slate-800 text-base truncate">{attachment.name}</p>
-                                <p className="text-slate-600 text-sm">{formatFileSize(attachment.size)}</p>
+                                <p className="font-medium text-slate-800 text-sm sm:text-base truncate">
+                                  {attachment.name}
+                                </p>
+                                <p className="text-slate-600 text-xs sm:text-sm">{formatFileSize(attachment.size)}</p>
                               </div>
                             </div>
                             {attachment.url && (
@@ -1237,16 +1243,16 @@ export default function RequestInboxPage() {
                   {selectedRequest && shouldShowSignatureOption(selectedRequest) && (
                     <Button
                       onClick={() => openSignatureDialog(selectedRequest)}
-                      className="bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                      className="bg-blue-500 hover:bg-blue-600 text-white shadow-lg"
                     >
                       <PenTool className="w-4 h-4 mr-2" />
-                      Add My Signature
+                      Add Signature
                     </Button>
                   )}
                   {selectedRequest && shouldShowActionOption(selectedRequest) && (
                     <Button
                       onClick={() => openActionDialog(selectedRequest)}
-                      className={`${themeColors.primary} ${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-300`}
+                      className={`${themeColors.primary} ${themeColors.primaryHover} text-white shadow-lg`}
                     >
                       <Settings className="w-4 h-4 mr-2" />
                       Take Action
@@ -1273,15 +1279,14 @@ export default function RequestInboxPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-6">
-              {!userSignature && (
+              {!userSignature || !signatureData && (
                 <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                   <div className="flex items-center space-x-2">
                     <AlertTriangle className="w-5 h-5 text-yellow-500" />
                     <div>
                       <p className="text-sm font-medium text-yellow-700 mb-1">No Signature Found</p>
                       <p className="text-sm text-yellow-600">
-                        You need to upload your signature first. Please go to Settings &gt; Profile to upload your
-                        signature.
+                                     You need to upload your signature first. Please go to Settings > Profile to upload your signature.
                       </p>
                     </div>
                   </div>
@@ -1290,7 +1295,7 @@ export default function RequestInboxPage() {
                     onClick={() => {
                       // Close the dialog and redirect to settings
                       setIsSignatureDialogOpen(false)
-                      router.push("/dashboard/settings/signature")
+                      router.push('/dashboard/settings/signature')
                     }}
                     className="mt-3"
                   >
@@ -1298,21 +1303,21 @@ export default function RequestInboxPage() {
                   </Button>
                 </div>
               )}
-              {userSignature && (
-                <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 bg-slate-50">
-                  <Label className="text-sm font-medium text-slate-600 mb-3 block">Sign in the area below:</Label>
-                  <canvas
-                    ref={signatureCanvasRef}
-                    width={500}
-                    height={200}
-                    className="border border-slate-300 rounded-lg bg-white cursor-crosshair w-full"
-                    onMouseDown={startDrawing}
-                    onMouseMove={draw}
-                    onMouseUp={stopDrawing}
-                    onMouseLeave={stopDrawing}
-                  />
-                </div>
-              )}
+              {/* {userSignature && (
+                             <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 bg-slate-50">
+                               <Label className="text-sm font-medium text-slate-600 mb-3 block">Sign in the area below:</Label>
+                               <canvas
+                                 ref={signatureCanvasRef}
+                                 width={500}
+                                 height={200}
+                                 className="border border-slate-300 rounded-lg bg-white cursor-crosshair w-full"
+                                 onMouseDown={startDrawing}
+                                 onMouseMove={draw}
+                                 onMouseUp={stopDrawing}
+                                 onMouseLeave={stopDrawing}
+                               />
+                             </div>
+                           )} */}
               {signatureData && (
                 <div className="p-3 bg-green-50 rounded-lg border border-green-200">
                   <Label className="text-sm font-medium text-green-700 mb-2 block">Signature Preview:</Label>
@@ -1348,25 +1353,26 @@ export default function RequestInboxPage() {
           </DialogContent>
         </Dialog>
 
+
         {/* Action Dialog */}
         <Dialog open={isActionDialogOpen} onOpenChange={setIsActionDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto border-0 shadow-2xl bg-white/95 backdrop-blur-sm">
-            <DialogHeader className="pb-6">
-              <DialogTitle className="flex items-center space-x-3 text-2xl">
-                <div className={`p-2 ${themeColors.iconBg}`}>
-                  <Settings className={`w-6 h-6 ${themeColors.iconColor}`} />
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto border-0 shadow-2xl">
+            <DialogHeader className="pb-4 sm:pb-6">
+              <DialogTitle className="flex items-center space-x-3 text-xl sm:text-2xl">
+                <div className={`p-2 ${themeColors.iconBg} rounded-xl`}>
+                  <Settings className={`w-5 h-5 sm:w-6 sm:h-6 ${themeColors.iconColor}`} />
                 </div>
                 <span>Take Action: {selectedRequest?.title}</span>
               </DialogTitle>
-              <DialogDescription className="text-lg">
+              <DialogDescription className="text-base sm:text-lg">
                 Review and take action on this request submission
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-8">
+            <div className="space-y-6 sm:space-y-8">
               {/* Request Summary */}
-              <div className="p-6 bg-gradient-to-r from-slate-50 to-gray-50 rounded-2xl">
+              <div className="p-4 sm:p-6 bg-gradient-to-r from-slate-50 to-gray-50 rounded-xl sm:rounded-2xl">
                 <h4 className="font-semibold text-slate-800 mb-4 text-lg">Request Summary</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-base">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm sm:text-base">
                   <div className="space-y-3">
                     <div>
                       <span className="text-slate-600">Category:</span>
@@ -1406,7 +1412,7 @@ export default function RequestInboxPage() {
                 </div>
                 <div className="mt-4 pt-4 border-t">
                   <span className="text-slate-600">Description:</span>
-                  <p className="mt-2 text-base text-slate-800 bg-white p-3 rounded-lg border">
+                  <p className="mt-2 text-sm sm:text-base text-slate-800 bg-white p-3 rounded-lg border">
                     {selectedRequest?.description}
                   </p>
                 </div>
@@ -1469,6 +1475,7 @@ export default function RequestInboxPage() {
           </DialogContent>
         </Dialog>
       </div>
+
       <style jsx>{`
         @keyframes float {
           0%, 100% { transform: translateY(0px); }
@@ -1488,4 +1495,3 @@ export default function RequestInboxPage() {
     </div>
   )
 }
-  

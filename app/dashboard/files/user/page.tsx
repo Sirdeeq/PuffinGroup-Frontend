@@ -177,7 +177,7 @@ type SortDirection = "asc" | "desc"
 
 const ITEMS_PER_PAGE = 30
 
-export default function FileManagerDepartmentPage() {
+export default function FileManagerUserPage() {
   const { toast } = useToast()
   const authContext = useAuth()
 
@@ -294,7 +294,7 @@ export default function FileManagerDepartmentPage() {
           border: "border-green-200",
           accent: "bg-green-500",
         }
-      default:
+      default: // This will apply to 'user' role
         return {
           primary: "bg-gradient-to-r from-blue-500 to-blue-600",
           primaryHover: "bg-gradient-to-r from-blue-600 to-blue-700",
@@ -316,72 +316,96 @@ export default function FileManagerDepartmentPage() {
 
   // Check if user can create folders based on new logic
   const canCreateFolder = () => {
-    const userDeptId = authContext.user?.department
-    console.log(userDeptId)
+    const userDeptId = authContext.user?.department?._id || authContext.user?.department
+    const userRole = authContext.user?.role
 
     // Admin and director can create folders anywhere
-    if (authContext.user?.role === "admin" || authContext.user?.role === "director") {
+    if (userRole === "admin" || userRole === "director") {
       return true
     }
 
-    // Department users:
-    if (authContext.user?.role === "department") {
-      // At root level (no current folder) - can create private folders
+    // Specific rules for 'department' role
+    if (userRole === "department") {
       if (!currentFolder) {
-        return true
+        return true // Can create private folders at root
       }
-      
-      // Inside Puffin Group's Public folder - can create department folders
-      if (currentFolder.name === "Puffin Group" && currentFolder.isPublic) {
-        return true
+      if (currentFolder.name === "Public" && currentFolder.isPublic) {
+        return true // Can create department folders inside Public
       }
-      
-      // Inside department folder within Puffin Group's Public folder - can create folders if it's their department
-      if (currentFolder.accessLevel === "public" && currentFolder.parentFolder?.name === "Puffin Group") {
+      if (currentFolder.accessLevel === "department") {
         const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
-        return isOwnDepartmentFolder
+        return isOwnDepartmentFolder // Can create public folders in own department folder
       }
-      
-      // Inside a private folder - can create sub-private folders if they are the creator
       if (currentFolder.accessLevel === "private") {
-        return currentFolder.createdBy?._id === authContext.user?._id
+        return currentFolder.createdBy?._id === authContext.user?._id // Can create sub-private folders if creator
       }
     }
 
-    return false
+    // Specific rules for 'user' role
+    if (userRole === "user") {
+      if (!currentFolder) {
+        return false // Users cannot create folders at root
+      }
+      if (currentFolder.name === "Public" && currentFolder.isPublic) {
+        return false // Users cannot create folders in Public
+      }
+      if (currentFolder.accessLevel === "department") {
+        const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
+        return isOwnDepartmentFolder // Users can create private folders inside their own department folder
+      }
+      if (currentFolder.accessLevel === "private") {
+        return currentFolder.createdBy?._id === authContext.user?._id // Users can create private subfolders if creator
+      }
+    }
+
+    return false // Default for other roles or unhandled cases
   }
 
   // Check if user can upload files
   const canUploadFiles = () => {
     const userDeptId = authContext.user?.department?._id || authContext.user?.department
+    const userRole = authContext.user?.role
 
     // Admin and director can upload anywhere
-    if (authContext.user?.role === "admin" || authContext.user?.role === "director") {
+    if (userRole === "admin" || userRole === "director") {
       return true
     }
 
-    // At root level - cannot upload files directly
-    if (!currentFolder) {
-      return false
+    // Specific rules for 'department' role
+    if (userRole === "department") {
+      if (!currentFolder) {
+        return false // Department users cannot upload at root
+      }
+      if (currentFolder.name === "Public" && currentFolder.isPublic) {
+        return true // Department users can upload in Public
+      }
+      if (currentFolder.accessLevel === "department") {
+        const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
+        return isOwnDepartmentFolder // Department users can upload in their own department folder
+      }
+      if (currentFolder.accessLevel === "private") {
+        return currentFolder.createdBy?._id === authContext.user?._id // Department users can upload in their own private folders
+      }
     }
 
-    // Inside "Public" folder (which is a default public folder) - allow uploads
-    if (currentFolder.name === "Public" && currentFolder.isPublic) {
-      return true
+    // Specific rules for 'user' role
+    if (userRole === "user") {
+      if (!currentFolder) {
+        return false // Users cannot upload at root
+      }
+      if (currentFolder.name === "Public" && currentFolder.isPublic) {
+        return false // Users cannot upload in Public
+      }
+      if (currentFolder.accessLevel === "department") {
+        const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
+        return isOwnDepartmentFolder // Users can upload files to their own department folder
+      }
+      if (currentFolder.accessLevel === "private") {
+        return currentFolder.createdBy?._id === authContext.user?._id // Users can upload files to their own private folders
+      }
     }
 
-    // Inside a department folder - allow uploads if it's their own department's folder
-    if (currentFolder.accessLevel === "department") {
-      const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
-      return isOwnDepartmentFolder
-    }
-
-    // Inside a private folder - allow uploads if they are the creator
-    if (currentFolder.accessLevel === "private") {
-      return currentFolder.createdBy?._id === authContext.user?._id
-    }
-
-    return false
+    return false // Default for other roles or unhandled cases
   }
 
   // Fetch notifications
@@ -757,25 +781,40 @@ export default function FileManagerDepartmentPage() {
     try {
       setIsProcessing(true)
       const userDeptId = authContext.user?.department?._id || authContext.user?.department
-      let newAccessLevel: "public" | "department" | "private" = "public"
+      let newAccessLevel: "public" | "department" | "private" = "private"
       let newDepartments: string[] = []
+      const userRole = authContext.user?.role
 
-      if (!currentFolder) {
-        // At root level, only private folders can be created
-        newAccessLevel = "private"
-        newDepartments = []
-      } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
-        // Inside "Public" folder, only department folders can be created
-        newAccessLevel = "department"
-        newDepartments = userDeptId ? [userDeptId] : []
-      } else if (currentFolder.accessLevel === "public") {
-        // Inside a department folder, only public folders can be created
-        newAccessLevel = "public"
-        newDepartments = userDeptId ? [userDeptId] : []
-      } else if (currentFolder.accessLevel === "private") {
-        // Inside a private folder, only private subfolders can be created
-        newAccessLevel = "private"
-        newDepartments = []
+      if (userRole === "admin" || userRole === "director") {
+        // Admins/Directors can choose, but for simplicity, we'll let the form handle it if enabled
+        // For now, we'll default to private if no current folder, otherwise inherit/allow choice
+        newAccessLevel = folderFormData.accessLevel // Allow form to dictate if admin/director
+        newDepartments = folderFormData.departments
+      } else if (userRole === "department") {
+        if (!currentFolder) {
+          newAccessLevel = "private"
+          newDepartments = []
+        } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
+          newAccessLevel = "department"
+          newDepartments = userDeptId ? [userDeptId] : []
+        } else if (currentFolder.accessLevel === "department") {
+          newAccessLevel = "public"
+          newDepartments = userDeptId ? [userDeptId] : []
+        } else if (currentFolder.accessLevel === "private") {
+          newAccessLevel = "private"
+          newDepartments = []
+        }
+      } else if (userRole === "user") {
+        if (currentFolder?.accessLevel === "department") {
+          newAccessLevel = "private" // Users can only create private folders inside their department folder
+          newDepartments = []
+        } else if (currentFolder?.accessLevel === "private" && currentFolder.createdBy?._id === authContext.user?._id) {
+          newAccessLevel = "private" // Users can create private subfolders in their own private folders
+          newDepartments = []
+        } else {
+          // Should be disabled by canCreateFolder, but as a fallback
+          throw new Error("You do not have permission to create folders here.")
+        }
       }
 
       const formData = {
@@ -796,7 +835,7 @@ export default function FileManagerDepartmentPage() {
         setFolderFormData({
           name: "",
           description: "",
-          accessLevel: "public", // Reset to default, will be overridden
+          accessLevel: "private", // Reset to default, will be overridden
           departments: [],
           parentFolderId: "",
         })
@@ -1244,27 +1283,97 @@ export default function FileManagerDepartmentPage() {
   }
 
   const getCreateFolderDescription = () => {
-    if (!currentFolder) {
-      return "You can only create private folders at the root level."
-    } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
-      return "You can only create department folders inside the Public folder."
-    } else if (currentFolder.accessLevel === "department") {
-      return "You can only create public folders inside your department folder."
-    } else if (currentFolder.accessLevel === "private") {
-      return "You can only create private subfolders inside this private folder."
+    const userRole = authContext.user?.role
+    const userDeptId = authContext.user?.department?._id || authContext.user?.department
+
+    if (userRole === "admin" || userRole === "director") {
+      return "Create a new folder anywhere."
+    }
+
+    if (userRole === "department") {
+      if (!currentFolder) {
+        return "You can create private folders at the root level."
+      } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
+        return "You can create department folders inside the Public folder."
+      } else if (currentFolder.accessLevel === "department") {
+        const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
+        if (isOwnDepartmentFolder) {
+          return "You can create public folders inside your department folder."
+        }
+        return "You cannot create folders in other department folders."
+      } else if (currentFolder.accessLevel === "private") {
+        if (currentFolder.createdBy?._id === authContext.user?._id) {
+          return "You can create private subfolders inside this private folder."
+        }
+        return "You cannot create folders in private folders you didn't create."
+      }
+    }
+
+    if (userRole === "user") {
+      if (!currentFolder) {
+        return "You cannot create folders at the root level."
+      } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
+        return "You cannot create folders inside the Public folder."
+      } else if (currentFolder.accessLevel === "department") {
+        const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
+        if (isOwnDepartmentFolder) {
+          return "You can create private folders inside your department folder."
+        }
+        return "You cannot create folders in other department folders."
+      } else if (currentFolder.accessLevel === "private") {
+        if (currentFolder.createdBy?._id === authContext.user?._id) {
+          return "You can create private subfolders inside this private folder."
+        }
+        return "You cannot create folders in private folders you didn't create."
+      }
     }
     return "Create a new folder in your accessible area."
   }
 
   const getCreateFolderAccessLevelText = () => {
-    if (!currentFolder) {
-      return "Private folders will be created at root level."
-    } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
-      return "Department folders will be created."
-    } else if (currentFolder.accessLevel === "department") {
-      return "Public folders will be created in your department."
-    } else if (currentFolder.accessLevel === "private") {
-      return "Private subfolders will be created."
+    const userRole = authContext.user?.role
+    const userDeptId = authContext.user?.department?._id || authContext.user?.department
+
+    if (userRole === "admin" || userRole === "director") {
+      return "Access level can be chosen freely."
+    }
+
+    if (userRole === "department") {
+      if (!currentFolder) {
+        return "Private folders will be created at root level."
+      } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
+        return "Department folders will be created."
+      } else if (currentFolder.accessLevel === "department") {
+        const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
+        if (isOwnDepartmentFolder) {
+          return "Public folders will be created in your department."
+        }
+        return "Folder creation is not allowed here."
+      } else if (currentFolder.accessLevel === "private") {
+        if (currentFolder.createdBy?._id === authContext.user?._id) {
+          return "Private subfolders will be created."
+        }
+        return "Folder creation is not allowed here."
+      }
+    }
+
+    if (userRole === "user") {
+      if (!currentFolder) {
+        return "Folder creation is not allowed at the root level."
+      } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
+        return "Folder creation is not allowed here."
+      } else if (currentFolder.accessLevel === "department") {
+        const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
+        if (isOwnDepartmentFolder) {
+          return "Private folders will be created in your department."
+        }
+        return "Folder creation is not allowed here."
+      } else if (currentFolder.accessLevel === "private") {
+        if (currentFolder.createdBy?._id === authContext.user?._id) {
+          return "Private subfolders will be created."
+        }
+        return "Folder creation is not allowed here."
+      }
     }
     return "Access level determined by current location."
   }
@@ -1350,7 +1459,7 @@ export default function FileManagerDepartmentPage() {
               <Button
                 variant="outline"
                 onClick={() => setShowCreateFolderModal(true)}
-                // disabled={!canCreateFolder()}
+                disabled={!canCreateFolder()}
                 className="flex items-center gap-1 sm:gap-2 hover:bg-gray-50 transition-all duration-200 h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm"
               >
                 <FolderPlus className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -1359,7 +1468,7 @@ export default function FileManagerDepartmentPage() {
               {/* Upload File Button */}
               <Button
                 onClick={() => setShowUploadModal(true)}
-                // disabled={!canUploadFiles()}
+                disabled={!canUploadFiles()}
                 className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm`}
               >
                 <Plus className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
@@ -2020,18 +2129,20 @@ export default function FileManagerDepartmentPage() {
                   </Label>
                   <Select
                     value={
-                      !currentFolder
-                        ? "private"
-                        : currentFolder.name === "Public" && currentFolder.isPublic
-                          ? "department"
-                          : currentFolder.accessLevel === "department"
-                            ? "public"
-                            : "private"
+                      authContext.user?.role === "admin" || authContext.user?.role === "director"
+                        ? folderFormData.accessLevel // Admins/Directors can choose
+                        : !currentFolder
+                          ? "private" // Root: private
+                          : currentFolder.name === "Public" && currentFolder.isPublic
+                            ? "department" // Inside Public: department
+                            : currentFolder.accessLevel === "department"
+                              ? "public" // Inside Department: public
+                              : "private" // Inside Private: private
                     }
                     onValueChange={(value: "public" | "department" | "private") =>
                       setFolderFormData((prev) => ({ ...prev, accessLevel: value }))
                     }
-                    disabled={true} // Disabled because access level is determined by location
+                    disabled={!(authContext.user?.role === "admin" || authContext.user?.role === "director")} // Only admins/directors can change
                   >
                     <SelectTrigger className="mt-1 h-12 rounded-xl">
                       <SelectValue placeholder="Select access level" />
@@ -2578,3 +2689,4 @@ export default function FileManagerDepartmentPage() {
     </div>
   )
 }
+    
