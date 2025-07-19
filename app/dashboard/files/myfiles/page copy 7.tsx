@@ -1,5 +1,4 @@
 "use client"
-
 import { useState, useEffect } from "react"
 import type React from "react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -59,7 +58,6 @@ import {
   Bell,
   ArrowLeft,
   ExternalLink,
-  Info,
 } from "lucide-react"
 import { redirect } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -147,8 +145,6 @@ interface FolderData {
 interface BreadcrumbItem {
   id: string
   name: string
-  accessLevel?: string
-  isPublic?: boolean
 }
 
 interface NotificationData {
@@ -237,18 +233,21 @@ export default function FileManagerDepartmentPage() {
     priority: "",
     departments: [] as string[],
   })
+
   const [shareFormData, setShareFormData] = useState({
     departments: [] as string[],
     users: [] as string[],
     message: "",
   })
+
   const [folderFormData, setFolderFormData] = useState({
     name: "",
     description: "",
-    accessLevel: "private" as "public" | "department" | "private", // This will be overridden by logic
-    departments: [] as string[], // This will be overridden by logic
+    accessLevel: "department" as "public" | "department" | "private",
+    departments: [] as string[],
     parentFolderId: "",
   })
+
   const [moveFormData, setMoveFormData] = useState({
     targetFolderId: "",
   })
@@ -307,6 +306,7 @@ export default function FileManagerDepartmentPage() {
         }
     }
   }
+
   const themeColors = getThemeColor()
 
   // Redirect if not authenticated
@@ -314,72 +314,26 @@ export default function FileManagerDepartmentPage() {
     redirect("/login")
   }
 
-  // Check if user can create folders based on new logic
+  // Check if user can create folders at current location
   const canCreateFolder = () => {
-    const userDeptId = authContext.user?.department
-    console.log(userDeptId)
+    if (authContext.user?.role === "admin") return true
+    if (authContext.user?.role === "director") return true
+    if (authContext.user?.role === "department") return true
 
-    // Admin and director can create folders anywhere
-    if (authContext.user?.role === "admin" || authContext.user?.role === "director") {
-      return true
-    }
+    // if (authContext.user?.role === "department") {
+    //   if (!currentFolder) return false // Can't create at root level
 
-    // Department users:
-    if (authContext.user?.role === "department") {
-      // At root level (no current folder) - can create private folders
-      if (!currentFolder) {
-        return true
-      }
-      
-      // Inside Puffin Group's Public folder - can create department folders
-      if (currentFolder.name === "Puffin Group" && currentFolder.isPublic) {
-        return true
-      }
-      
-      // Inside department folder within Puffin Group's Public folder - can create folders if it's their department
-      if (currentFolder.accessLevel === "public" && currentFolder.parentFolder?.name === "Puffin Group") {
-        const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
-        return isOwnDepartmentFolder
-      }
-      
-      // Inside a private folder - can create sub-private folders if they are the creator
-      if (currentFolder.accessLevel === "private") {
-        return currentFolder.createdBy?._id === authContext.user?._id
-      }
-    }
+    //   // Can create in their own department folders or private folders they created
+    //   const userDeptId = authContext.user?.department?._id || authContext.user?.department
+    //   const isOwnDepartment = currentFolder.departments.some((dept) => dept._id === userDeptId)
+    //   const isCreatedByUser = currentFolder.createdBy?._id === authContext.user?._id
 
-    return false
-  }
-
-  // Check if user can upload files
-  const canUploadFiles = () => {
-    const userDeptId = authContext.user?.department?._id || authContext.user?.department
-
-    // Admin and director can upload anywhere
-    if (authContext.user?.role === "admin" || authContext.user?.role === "director") {
-      return true
-    }
-
-    // At root level - cannot upload files directly
-    if (!currentFolder) {
-      return false
-    }
-
-    // Inside "Public" folder (which is a default public folder) - allow uploads
-    if (currentFolder.name === "Public" && currentFolder.isPublic) {
-      return true
-    }
-
-    // Inside a department folder - allow uploads if it's their own department's folder
-    if (currentFolder.accessLevel === "department") {
-      const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
-      return isOwnDepartmentFolder
-    }
-
-    // Inside a private folder - allow uploads if they are the creator
-    if (currentFolder.accessLevel === "private") {
-      return currentFolder.createdBy?._id === authContext.user?._id
-    }
+    //   return (
+    //     (currentFolder.accessLevel === "department" && isOwnDepartment) ||
+    //     (currentFolder.accessLevel === "private" && isCreatedByUser) ||
+    //     (currentFolder.accessLevel === "public" && isOwnDepartment)
+    //   )
+    // }
 
     return false
   }
@@ -447,11 +401,13 @@ export default function FileManagerDepartmentPage() {
     }
   }
 
-  // Fetch folders and files with updated logic
+  // Fetch folders and files with department-specific logic
   const fetchData = async () => {
     try {
       setLoading(true)
       console.log("Fetching data for folder:", currentFolder?._id || "root")
+
+      // Get department ID from user
       const departmentId = authContext.user?.department?._id || authContext.user?.department
 
       // Build query parameters based on current folder
@@ -461,18 +417,25 @@ export default function FileManagerDepartmentPage() {
       } else {
         folderParams.parentId = "root"
       }
+
+      // For department users, include all folders they can access
       if (authContext.user?.role === "department" && departmentId) {
-        folderParams.includeAll = true
+        folderParams.includeAll = true // Include private folders they created
       }
 
       // Fetch folders
       const foldersResponse = await api.getFolders(folderParams, authContext)
       console.log("Folders response:", foldersResponse)
+
       if (foldersResponse.success && foldersResponse.data?.data) {
+        // Handle both array response and object with folders property
         const fetchedFolders = Array.isArray(foldersResponse.data.data)
           ? foldersResponse.data.data
           : foldersResponse.data.data.folders || []
+
         console.log("Setting folders:", fetchedFolders)
+
+        // Process folders to ensure they have required properties
         const processedFolders = fetchedFolders.map((folder: any) => ({
           ...folder,
           fileCount: folder.fileCount || 0,
@@ -483,18 +446,25 @@ export default function FileManagerDepartmentPage() {
           canUpload: folder.canUpload !== false,
           canCreateSubfolder: folder.canCreateSubfolder !== false,
         }))
+
         setFolders(processedFolders)
       }
 
       // Fetch files
       const filesParams: any = currentFolder ? { folderId: currentFolder._id } : {}
+
+      // Add department filter for department users
       if (authContext.user?.role === "department" && departmentId) {
         filesParams.department = departmentId
       }
+
       const filesResponse = await api.getFiles(filesParams, authContext)
       console.log("Files response:", filesResponse)
+
       if (filesResponse.success && filesResponse.data) {
+        // Handle both array response and object with files property
         const filesData = Array.isArray(filesResponse.data) ? filesResponse.data : filesResponse.data.files || []
+
         const processedFiles = filesData.map((file: any) => ({
           ...file,
           name: file.name || file.title || "Untitled",
@@ -519,10 +489,12 @@ export default function FileManagerDepartmentPage() {
           folder: file.folder || null,
           departments: file.departments || [],
           isInPublicFolder: file.folder?.isPublic || false,
+          // Check if user can edit/delete based on department and ownership
           canEdit: file.createdBy?._id === authContext.user?._id || authContext.user?.role === "admin",
           canDelete: file.createdBy?._id === authContext.user?._id || authContext.user?.role === "admin",
           canShare: file.canShare !== false,
         }))
+
         console.log("Setting files:", processedFiles)
         setFiles(processedFiles)
       }
@@ -563,15 +535,18 @@ export default function FileManagerDepartmentPage() {
       const [deptResponse, usersResponse, foldersResponse] = await Promise.all([
         api.getDepartments({ includeInactive: false }, authContext),
         api.getUsers(authContext),
-        api.getFolders({ includeAll: true }, authContext),
+        api.getFolders({ includeAll: true }, authContext), // Get all folders for move operations
       ])
+
       if (deptResponse.success && deptResponse.data) {
         setDepartments(deptResponse.data.departments || [])
       }
+
       if (usersResponse.success && usersResponse.data) {
         const filteredUsers = (usersResponse.data.users || []).filter((user) => user.role === "user")
         setUsers(filteredUsers)
       }
+
       if (foldersResponse.success && foldersResponse.data) {
         const allFolders = Array.isArray(foldersResponse.data)
           ? foldersResponse.data
@@ -591,29 +566,49 @@ export default function FileManagerDepartmentPage() {
     }
   }, [authContext, currentFolder])
 
-  // Search, sort, and paginate items
+  // Search, sort, and paginate items with proper filtering logic
   useEffect(() => {
     console.log("Filtering items. Current folder:", currentFolder?._id)
     console.log("Available folders:", folders)
     console.log("Available files:", files)
+
     let items: (FileData | FolderData)[] = []
+
     if (!currentFolder) {
-      // At root level: show public folder and private folders created by user
+      // At root level: show accessible folders and shared files
       const accessibleFolders = folders.filter((folder) => {
-        // Show public folders
-        if (folder.isPublic || folder.accessLevel === "public") {
+        // Show public and default folders
+        if (folder.isPublic || folder.isDefault || folder.accessLevel === "public") {
           return true
         }
-        if (folder.accessLevel === "department") {
+
+        // Show department folders for user's department
+        if (
+          folder.accessLevel === "department" &&
+          folder.departments.some(
+            (dept) =>
+              authContext.user?.department &&
+              (Array.isArray(authContext.user.department)
+                ? authContext.user.department.includes(dept._id)
+                : authContext.user.department === dept._id || authContext.user.department._id === dept._id),
+          )
+        ) {
           return true
         }
+
         // Show private folders created by the user
         if (folder.accessLevel === "private" && folder.createdBy?._id === authContext.user?._id) {
           return true
         }
+
         return false
       })
-      items = [...accessibleFolders]
+
+      // Show files in public folders and shared files at root level
+      const publicFiles = files.filter(
+        (file) => !file.folder || file.folder.isPublic || file.isInPublicFolder || file.sharedWithMe,
+      )
+      items = [...accessibleFolders, ]
       console.log("Root level items:", items)
     } else {
       // In a specific folder: show subfolders and files in that folder
@@ -623,6 +618,8 @@ export default function FileManagerDepartmentPage() {
       const folderFiles = files.filter((file) => file.folder && file.folder._id === currentFolder._id)
       items = [...subfolders, ...folderFiles]
       console.log("Folder items:", items)
+      console.log("Subfolders found:", subfolders)
+      console.log("Files found:", folderFiles)
     }
 
     // Filter by search term
@@ -641,6 +638,7 @@ export default function FileManagerDepartmentPage() {
     filtered.sort((a, b) => {
       const aIsFolder = !("file" in a)
       const bIsFolder = !("file" in b)
+
       // Always show folders before files
       if (aIsFolder && !bIsFolder) return -1
       if (!aIsFolder && bIsFolder) return 1
@@ -681,6 +679,7 @@ export default function FileManagerDepartmentPage() {
     const totalItems = filtered.length
     const pages = Math.ceil(totalItems / ITEMS_PER_PAGE)
     setTotalPages(pages)
+
     // Reset to first page if current page is out of bounds
     if (currentPage > pages && pages > 0) {
       setCurrentPage(1)
@@ -756,34 +755,12 @@ export default function FileManagerDepartmentPage() {
   const handleCreateFolder = async () => {
     try {
       setIsProcessing(true)
-      const userDeptId = authContext.user?.department?._id || authContext.user?.department
-      let newAccessLevel: "public" | "department" | "private" = "public"
-      let newDepartments: string[] = []
-
-      if (!currentFolder) {
-        // At root level, only private folders can be created
-        newAccessLevel = "private"
-        newDepartments = []
-      } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
-        // Inside "Public" folder, only department folders can be created
-        newAccessLevel = "department"
-        newDepartments = userDeptId ? [userDeptId] : []
-      } else if (currentFolder.accessLevel === "public") {
-        // Inside a department folder, only public folders can be created
-        newAccessLevel = "public"
-        newDepartments = userDeptId ? [userDeptId] : []
-      } else if (currentFolder.accessLevel === "private") {
-        // Inside a private folder, only private subfolders can be created
-        newAccessLevel = "private"
-        newDepartments = []
-      }
+      const departmentId = authContext.user?.department?._id || authContext.user?.department
 
       const formData = {
-        name: folderFormData.name,
-        description: folderFormData.description,
-        accessLevel: newAccessLevel,
-        departments: newDepartments,
+        ...folderFormData,
         parentFolder: currentFolder?._id || null,
+        departments: folderFormData.accessLevel === "department" ? [departmentId] : [],
       }
 
       const response = await api.createFolder(formData, authContext)
@@ -796,7 +773,7 @@ export default function FileManagerDepartmentPage() {
         setFolderFormData({
           name: "",
           description: "",
-          accessLevel: "public", // Reset to default, will be overridden
+          accessLevel: "department",
           departments: [],
           parentFolderId: "",
         })
@@ -951,6 +928,7 @@ export default function FileManagerDepartmentPage() {
     e.preventDefault()
     setIsDragOver(null)
     if (!draggedFile) return
+
     try {
       setIsProcessing(true)
       const response = await api.moveFile(draggedFile._id, targetFolder._id, authContext)
@@ -1109,14 +1087,17 @@ export default function FileManagerDepartmentPage() {
       setIsProcessing(true)
       const itemId = selectedFile?._id || selectedFolder?._id
       if (!itemId) return
+
       const shareData = {
         departments: shareFormData.departments,
         users: shareFormData.users,
         message: shareFormData.message,
       }
+
       const response = selectedFile
         ? await api.shareFile(itemId, shareData, authContext)
         : await api.shareFolder(itemId, shareData, authContext)
+
       if (response.success) {
         toast({
           title: "Success",
@@ -1159,6 +1140,7 @@ export default function FileManagerDepartmentPage() {
               key={notification._id}
               onClick={() => {
                 markNotificationAsRead(notification._id)
+                // Handle notification click (e.g., open related file)
               }}
               className={`border-b ${!notification.isRead ? "bg-blue-50" : ""}`}
             >
@@ -1172,62 +1154,6 @@ export default function FileManagerDepartmentPage() {
       </DropdownMenuContent>
     </DropdownMenu>
   )
-
-  // Render breadcrumb with three dots for deep navigation
-  const renderBreadcrumb = () => {
-    const maxVisible = 3
-    const showDots = breadcrumb.length > maxVisible
-    return (
-      <div className="flex items-center gap-1 text-sm overflow-x-auto">
-        <Home className="w-4 h-4 text-gray-500 flex-shrink-0" />
-        <button
-          onClick={() => setCurrentFolder(null)}
-          className="hover:text-blue-600 transition-colors text-gray-600 hover:bg-blue-50 px-2 py-1 rounded-lg whitespace-nowrap"
-        >
-          Public
-        </button>
-        {breadcrumb.length > 0 && (
-          <>
-            {showDots && breadcrumb.length > maxVisible && (
-              <>
-                <ChevronRight className="w-4 h-4 text-gray-400" />
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-6 px-2 text-gray-600">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    {breadcrumb.slice(0, -maxVisible + 1).map((item, index) => (
-                      <DropdownMenuItem key={item.id} onClick={() => navigateToBreadcrumb(item, index)}>
-                        <Folder className="w-4 h-4 mr-2" />
-                        {item.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            )}
-            {(showDots ? breadcrumb.slice(-maxVisible + 1) : breadcrumb).map((item, index, arr) => (
-              <div key={item.id} className="flex items-center gap-1 flex-shrink-0">
-                <ChevronRight className="w-4 h-4 text-gray-400" />
-                <button
-                  onClick={() => navigateToBreadcrumb(item, showDots ? breadcrumb.length - arr.length + index : index)}
-                  className={`hover:text-blue-600 transition-colors px-2 py-1 rounded-lg whitespace-nowrap ${
-                    index === arr.length - 1
-                      ? `font-medium ${themeColors.text} bg-blue-50`
-                      : "text-gray-600 hover:bg-blue-50"
-                  }`}
-                >
-                  {item.name}
-                </button>
-              </div>
-            ))}
-          </>
-        )}
-      </div>
-    )
-  }
 
   if (loading) {
     return (
@@ -1243,205 +1169,157 @@ export default function FileManagerDepartmentPage() {
     )
   }
 
-  const getCreateFolderDescription = () => {
-    if (!currentFolder) {
-      return "You can only create private folders at the root level."
-    } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
-      return "You can only create department folders inside the Public folder."
-    } else if (currentFolder.accessLevel === "department") {
-      return "You can only create public folders inside your department folder."
-    } else if (currentFolder.accessLevel === "private") {
-      return "You can only create private subfolders inside this private folder."
-    }
-    return "Create a new folder in your accessible area."
-  }
-
-  const getCreateFolderAccessLevelText = () => {
-    if (!currentFolder) {
-      return "Private folders will be created at root level."
-    } else if (currentFolder.name === "Public" && currentFolder.isPublic) {
-      return "Department folders will be created."
-    } else if (currentFolder.accessLevel === "department") {
-      return "Public folders will be created in your department."
-    } else if (currentFolder.accessLevel === "private") {
-      return "Private subfolders will be created."
-    }
-    return "Access level determined by current location."
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 lg:p-6">
-        {/* Folder Header */}
-        <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-            {/* Left side - Title and Description */}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
+      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+        {/* Enhanced Header with Breadcrumb and Notifications */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            {/* Left side - Navigation and Title */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 min-w-0 flex-1">
+              {/* Navigation Controls */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Back Button */}
                 {currentFolder && (
-                  <div className="p-1.5 sm:p-2 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100">
-                    {getFolderIcon(currentFolder.accessLevel, currentFolder.isDefault, currentFolder.isPublic)}
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={navigateBack}
+                    className="h-10 px-3 hover:bg-gray-100 rounded-lg"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
                 )}
-                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
+
+                {/* Breadcrumb Navigation */}
+                <div className="flex items-center gap-1 text-sm overflow-x-auto">
+                  <Home className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                  <button
+                    onClick={() => setCurrentFolder(null)}
+                    className="hover:text-blue-600 transition-colors text-gray-600 hover:bg-blue-50 px-2 py-1 rounded-lg whitespace-nowrap"
+                  >
+                    File Manager
+                  </button>
+                  {breadcrumb.map((item, index) => (
+                    <div key={item.id} className="flex items-center gap-1 flex-shrink-0">
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                      <button
+                        onClick={() => navigateToBreadcrumb(item, index)}
+                        className={`hover:text-blue-600 transition-colors px-2 py-1 rounded-lg whitespace-nowrap ${
+                          index === breadcrumb.length - 1
+                            ? `font-medium ${themeColors.text} bg-blue-50`
+                            : "text-gray-600 hover:bg-blue-50"
+                        }`}
+                      >
+                        {item.name}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Title Section */}
+              <div className="min-w-0 flex-1">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 truncate">
                   {currentFolder ? currentFolder.name : "Department File Manager"}
                 </h1>
-                {currentFolder && (
-                  <Badge
-                    variant="secondary"
-                    className={`text-xs px-2 py-1 rounded-lg hidden sm:inline-flex ${
-                      currentFolder.isPublic || currentFolder.accessLevel === "public"
-                        ? "bg-green-100 text-green-700"
-                        : currentFolder.accessLevel === "private"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-orange-100 text-orange-700"
-                    }`}
-                  >
-                    {currentFolder.isPublic || currentFolder.accessLevel === "public"
-                      ? "Public"
-                      : currentFolder.accessLevel === "private"
-                        ? "Private"
-                        : "Department"}
-                  </Badge>
-                )}
+                <p className="text-sm sm:text-base text-gray-600 truncate">
+                  {currentFolder ? currentFolder.description : "Access public folders and your department's files"}
+                </p>
               </div>
-              <p className="text-sm sm:text-base text-gray-600 truncate">
-                {currentFolder ? currentFolder.description : "Access public folders and your department's files"}
-              </p>
             </div>
+
             {/* Right side - Action buttons */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:gap-4">
               {/* Notification Bell */}
               {renderNotificationBell()}
+
               {/* Selection Mode Toggle */}
               {paginatedItems.length > 0 && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={toggleSelectMode}
-                  className={`flex items-center gap-1 sm:gap-2 transition-all duration-200 h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm ${
+                  className={`flex items-center gap-2 transition-all duration-200 h-10 ${
                     selectMode ? `${themeColors.primary} text-white` : "hover:bg-gray-50 bg-transparent"
                   }`}
                 >
-                  <Check className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <Check className="w-4 h-4" />
                   <span className="hidden sm:inline">{selectMode ? "Exit Select" : "Select"}</span>
                 </Button>
               )}
+
               {/* Refresh Button */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={fetchData}
                 disabled={loading}
-                className="flex items-center gap-1 sm:gap-2 hover:bg-gray-50 transition-all duration-200 bg-transparent h-8 sm:h-10 px-2 sm:px-3"
+                className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 bg-transparent h-10"
               >
-                <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 ${loading ? "animate-spin" : ""}`} />
-                <span className="hidden sm:inline text-xs sm:text-sm">Refresh</span>
+                <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+                <span className="hidden sm:inline">Refresh</span>
               </Button>
+
               {/* Items Count Badge */}
               <Badge
                 variant="outline"
-                className={`${themeColors.border} ${themeColors.text} px-2 sm:px-3 py-1 sm:py-2 h-8 sm:h-10 flex items-center text-xs sm:text-sm`}
+                className={`${themeColors.border} ${themeColors.text} px-3 py-2 h-10 flex items-center`}
               >
                 <span className="font-medium">{filteredItems.length}</span>
                 <span className="hidden sm:inline ml-1">Items</span>
               </Badge>
+
               {/* New Folder Button */}
               <Button
                 variant="outline"
                 onClick={() => setShowCreateFolderModal(true)}
-                // disabled={!canCreateFolder()}
-                className="flex items-center gap-1 sm:gap-2 hover:bg-gray-50 transition-all duration-200 h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm"
+                disabled={!canCreateFolder()}
+                className="flex items-center gap-2 hover:bg-gray-50 transition-all duration-200 h-10"
               >
-                <FolderPlus className="w-3 h-3 sm:w-4 sm:h-4" />
+                <FolderPlus className="w-4 h-4" />
                 <span className="hidden sm:inline">New Folder</span>
               </Button>
+
               {/* Upload File Button */}
               <Button
                 onClick={() => setShowUploadModal(true)}
-                // disabled={!canUploadFiles()}
-                className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm`}
+                className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 h-10`}
               >
-                <Plus className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                <Plus className="w-4 h-4 sm:mr-2" />
                 <span className="hidden sm:inline">Upload File</span>
               </Button>
             </div>
           </div>
         </div>
-        {/* Breadcrumb Navigation */}
-        <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
-          <div className="flex items-center justify-between gap-2 sm:gap-4">
-            {/* Back Button and Breadcrumb */}
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-              {/* Back Button */}
-              {currentFolder && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={navigateBack}
-                  className="h-8 sm:h-10 px-2 sm:px-3 hover:bg-gray-100 rounded-lg flex-shrink-0"
-                >
-                  <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4" />
-                </Button>
-              )}
-              {/* Breadcrumb */}
-              <div className="min-w-0 flex-1 overflow-hidden">{renderBreadcrumb()}</div>
-            </div>
-            {/* Current Folder Info Button */}
-            {currentFolder && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => openFolderViewModal(currentFolder)}
-                className="h-8 sm:h-10 px-2 sm:px-3 hover:bg-gray-100 rounded-lg flex-shrink-0"
-              >
-                <Info className="w-3 h-3 sm:w-4 sm:h-4" />
-              </Button>
-            )}
-          </div>
-        </div>
+
         {/* Selection Actions Bar */}
         {selectMode && selectedItems.length > 0 && (
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-              <div className="flex items-center gap-2 sm:gap-4">
-                <Badge variant="secondary" className="px-2 sm:px-3 py-1 text-xs sm:text-sm">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <Badge variant="secondary" className="px-3 py-1">
                   {selectedItems.length} selected
                 </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={selectAllItems}
-                  className="h-7 sm:h-8 text-xs sm:text-sm bg-transparent"
-                >
+                <Button variant="outline" size="sm" onClick={selectAllItems} className="h-8 bg-transparent">
                   Select All
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={clearSelection}
-                  className="h-7 sm:h-8 text-xs sm:text-sm bg-transparent"
-                >
+                <Button variant="outline" size="sm" onClick={clearSelection} className="h-8 bg-transparent">
                   Clear
                 </Button>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowMoveModal(true)}
-                  className="h-7 sm:h-8 text-xs sm:text-sm"
-                >
-                  <Move className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                <Button variant="outline" size="sm" onClick={() => setShowMoveModal(true)} className="h-8">
+                  <Move className="w-4 h-4 mr-1" />
                   Move
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setShowBulkDeleteDialog(true)}
-                  className="h-7 sm:h-8 text-xs sm:text-sm text-red-600 hover:text-red-700"
+                  className="h-8 text-red-600 hover:text-red-700"
                 >
-                  <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                  <Trash2 className="w-4 h-4 mr-1" />
                   Delete
                 </Button>
                 <Button
@@ -1451,39 +1329,36 @@ export default function FileManagerDepartmentPage() {
                     setSelectMode(false)
                     setSelectedItems([])
                   }}
-                  className="h-7 sm:h-8 text-xs sm:text-sm"
+                  className="h-8"
                 >
-                  <X className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <X className="w-4 h-4" />
                 </Button>
               </div>
             </div>
           </div>
         )}
+
         {/* Enhanced Search and Controls */}
-        <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4 lg:gap-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <Input
                 placeholder="Search files and folders..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 sm:pl-12 h-10 sm:h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500 rounded-xl transition-all duration-200 text-sm sm:text-base"
+                className="pl-12 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500 rounded-xl transition-all duration-200"
               />
             </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {/* Sort Options */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-10 sm:h-12 px-3 sm:px-4 rounded-xl hover:bg-gray-50 bg-transparent text-xs sm:text-sm"
-                  >
+                  <Button variant="outline" size="sm" className="h-12 px-4 rounded-xl hover:bg-gray-50 bg-transparent">
                     {sortDirection === "asc" ? (
-                      <SortAsc className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                      <SortAsc className="w-4 h-4 mr-2" />
                     ) : (
-                      <SortDesc className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                      <SortDesc className="w-4 h-4 mr-2" />
                     )}
                     <span className="hidden sm:inline">Sort by {sortBy}</span>
                     <span className="sm:hidden">Sort</span>
@@ -1510,60 +1385,58 @@ export default function FileManagerDepartmentPage() {
                   variant={viewMode === "grid" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("grid")}
-                  className={`h-8 sm:h-10 px-3 sm:px-4 rounded-lg transition-all duration-200 ${
+                  className={`h-10 px-4 rounded-lg transition-all duration-200 ${
                     viewMode === "grid" ? themeColors.primary : "hover:bg-gray-200"
                   }`}
                 >
-                  <Grid3X3 className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <Grid3X3 className="w-4 h-4" />
                 </Button>
                 <Button
                   variant={viewMode === "list" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("list")}
-                  className={`h-8 sm:h-10 px-3 sm:px-4 rounded-lg transition-all duration-200 ${
+                  className={`h-10 px-4 rounded-lg transition-all duration-200 ${
                     viewMode === "list" ? themeColors.primary : "hover:bg-gray-200"
                   }`}
                 >
-                  <List className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <List className="w-4 h-4" />
                 </Button>
               </div>
             </div>
           </div>
         </div>
+
         {/* Items Display */}
         {paginatedItems.length === 0 ? (
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200">
-            <div className="p-8 sm:p-12 lg:p-16 text-center">
-              <div
-                className={`w-16 sm:w-20 h-16 sm:h-20 rounded-full ${themeColors.bg} flex items-center justify-center mx-auto mb-4 sm:mb-6`}
-              >
-                <Folder className={`w-8 sm:w-10 h-8 sm:h-10 ${themeColors.text}`} />
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
+            <div className="p-16 text-center">
+              <div className={`w-20 h-20 rounded-full ${themeColors.bg} flex items-center justify-center mx-auto mb-6`}>
+                <Folder className={`w-10 h-10 ${themeColors.text}`} />
               </div>
-              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
                 {searchTerm ? "No items found" : currentFolder ? "Folder is empty" : "No accessible folders yet"}
               </h3>
-              <p className="text-sm sm:text-base text-gray-600 mb-6 sm:mb-8 max-w-md mx-auto">
+              <p className="text-gray-600 mb-8 max-w-md mx-auto">
                 {searchTerm
                   ? "Try adjusting your search terms or browse through folders"
                   : "Create folders and upload files to get started with organizing your content"}
               </p>
               {!searchTerm && (
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+                <div className="flex gap-4 justify-center">
                   <Button
                     onClick={() => setShowCreateFolderModal(true)}
                     variant="outline"
                     disabled={!canCreateFolder()}
-                    className="flex items-center gap-2 h-10 sm:h-12 px-4 sm:px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 text-sm sm:text-base"
+                    className="flex items-center gap-2 h-12 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200"
                   >
-                    <FolderPlus className="w-4 sm:w-5 h-4 sm:h-5" />
+                    <FolderPlus className="w-5 h-5" />
                     Create Folder
                   </Button>
                   <Button
                     onClick={() => setShowUploadModal(true)}
-                    disabled={!canUploadFiles()}
-                    className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white h-10 sm:h-12 px-4 sm:px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 text-sm sm:text-base`}
+                    className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white h-12 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105`}
                   >
-                    <Plus className="w-4 sm:w-5 h-4 sm:h-5 mr-2" />
+                    <Plus className="w-5 h-5 mr-2" />
                     Upload File
                   </Button>
                 </div>
@@ -1574,16 +1447,17 @@ export default function FileManagerDepartmentPage() {
           <>
             {/* Grid View */}
             {viewMode === "grid" && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
                 {paginatedItems.map((item) => {
                   const isFolder = !("file" in item)
                   const folder = isFolder ? (item as FolderData) : null
                   const file = !isFolder ? (item as FileData) : null
                   const isSelected = selectedItems.includes(item._id)
+
                   return (
                     <Card
                       key={item._id}
-                      className={`group relative cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-0 shadow-md bg-white rounded-xl sm:rounded-2xl overflow-hidden ${
+                      className={`group relative cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-0 shadow-md bg-white rounded-2xl overflow-hidden ${
                         draggedFile && isFolder ? `ring-2 ring-blue-400 ${themeColors.bg} transform scale-105` : ""
                       } ${isDragOver === item._id ? "ring-2 ring-blue-400 bg-blue-50" : ""} ${
                         isSelected ? `ring-2 ${themeColors.border} ${themeColors.bg}` : ""
@@ -1602,10 +1476,10 @@ export default function FileManagerDepartmentPage() {
                       onDragLeave={isFolder ? handleDragLeave : undefined}
                       onDrop={isFolder ? (e) => handleDrop(e, folder!) : undefined}
                     >
-                      <CardContent className="p-3 sm:p-4 lg:p-6 text-center">
+                      <CardContent className="p-6 text-center">
                         {/* Selection Checkbox */}
                         {selectMode && (
-                          <div className="absolute top-2 sm:top-3 left-2 sm:left-3 z-10">
+                          <div className="absolute top-3 left-3 z-10">
                             <Checkbox
                               checked={isSelected}
                               onCheckedChange={() => toggleItemSelection(item._id)}
@@ -1613,34 +1487,42 @@ export default function FileManagerDepartmentPage() {
                             />
                           </div>
                         )}
-                        <div className="mb-3 sm:mb-4 flex justify-center">
-                          <div className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
+
+                        <div className="mb-4 flex justify-center">
+                          <div className="p-3 rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
                             {isFolder
                               ? getFolderIcon(folder!.accessLevel, folder!.isDefault, folder!.isPublic)
                               : getFileIcon(file!.file.type, file!.file.name)}
                           </div>
                         </div>
+
                         <h3
-                          className="font-semibold text-xs sm:text-sm text-gray-900 truncate mb-1 sm:mb-2 group-hover:text-blue-600 transition-colors duration-200"
+                          className="font-semibold text-sm text-gray-900 truncate mb-2 group-hover:text-blue-600 transition-colors duration-200"
                           title={isFolder ? folder!.name : file!.name}
                         >
                           {isFolder ? folder!.name : file!.name}
                         </h3>
+
+                        {/* <p className="text-xs text-gray-500 mb-3">
+                          {isFolder ? `${folder!.fileCount || 0} files` : formatFileSize(file!.file.size)}
+                        </p> */}
+
                         <div className="flex items-center justify-center gap-1 text-xs text-gray-400">
                           <Clock className="w-3 h-3" />
                           {formatDate(item.createdAt)}
                         </div>
+
                         {/* Action Menu */}
                         {!selectMode && (
-                          <div className="absolute top-2 sm:top-3 right-2 sm:right-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-6 w-6 sm:h-8 sm:w-8 p-0 bg-white/90 backdrop-blur-sm shadow-lg hover:bg-white rounded-lg sm:rounded-xl"
+                                  className="h-8 w-8 p-0 bg-white/90 backdrop-blur-sm shadow-lg hover:bg-white rounded-xl"
                                 >
-                                  <MoreHorizontal className="w-3 h-3 sm:w-4 sm:h-4" />
+                                  <MoreHorizontal className="w-4 h-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48">
@@ -1702,12 +1584,13 @@ export default function FileManagerDepartmentPage() {
                             </DropdownMenu>
                           </div>
                         )}
+
                         {/* Status Indicators */}
-                        <div className="absolute top-2 sm:top-3 left-2 sm:left-3 flex flex-col gap-1">
+                        <div className="absolute top-3 left-3 flex flex-col gap-1">
                           {isFolder && (
                             <Badge
                               variant="secondary"
-                              className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg ${
+                              className={`text-xs px-2 py-1 rounded-lg ${
                                 folder!.isPublic || folder!.accessLevel === "public"
                                   ? "bg-green-100 text-green-700"
                                   : folder!.accessLevel === "private"
@@ -1725,20 +1608,18 @@ export default function FileManagerDepartmentPage() {
                           {!isFolder && file!.sharedWithMe && (
                             <Badge
                               variant="secondary"
-                              className="text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 bg-blue-100 text-blue-700 rounded-md sm:rounded-lg"
+                              className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-lg"
                             >
                               Shared
                             </Badge>
                           )}
                           {isFolder && folder!.isDefault && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 bg-blue-50 text-blue-700 rounded-md sm:rounded-lg"
-                            >
+                            <Badge variant="outline" className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-lg">
                               Default
                             </Badge>
                           )}
                         </div>
+
                         {/* Drag indicator for files */}
                         {!isFolder && !selectMode && (
                           <div
@@ -1753,19 +1634,21 @@ export default function FileManagerDepartmentPage() {
                 })}
               </div>
             )}
+
             {/* List View */}
             {viewMode === "list" && (
-              <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="divide-y divide-gray-100">
                   {paginatedItems.map((item) => {
                     const isFolder = !("file" in item)
                     const folder = isFolder ? (item as FolderData) : null
                     const file = !isFolder ? (item as FileData) : null
                     const isSelected = selectedItems.includes(item._id)
+
                     return (
                       <div
                         key={item._id}
-                        className={`flex items-center p-3 sm:p-4 lg:p-6 hover:bg-gray-50 cursor-pointer group transition-all duration-200 ${
+                        className={`flex items-center p-6 hover:bg-gray-50 cursor-pointer group transition-all duration-200 ${
                           draggedFile && isFolder ? "bg-blue-50 border-l-4 border-blue-400" : ""
                         } ${isDragOver === item._id ? "bg-blue-50 border-l-4 border-blue-400" : ""} ${
                           isSelected ? `${themeColors.bg} border-l-4 ${themeColors.border}` : ""
@@ -1788,25 +1671,26 @@ export default function FileManagerDepartmentPage() {
                       >
                         {/* Selection Checkbox */}
                         {selectMode && (
-                          <div className="mr-3 sm:mr-4">
+                          <div className="mr-4">
                             <Checkbox checked={isSelected} onCheckedChange={() => toggleItemSelection(item._id)} />
                           </div>
                         )}
+
                         <div className="flex items-center flex-1 min-w-0">
-                          <div className="mr-3 sm:mr-4 p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
+                          <div className="mr-4 p-2 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
                             {isFolder
                               ? getFolderIcon(folder!.accessLevel, folder!.isDefault, folder!.isPublic)
                               : getFileIcon(file!.file.type, file!.file.name)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 sm:gap-3 mb-1">
-                              <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">
+                            <div className="flex items-center gap-3 mb-1">
+                              <h3 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">
                                 {isFolder ? folder!.name : file!.name}
                               </h3>
                               {isFolder && folder!.isDefault && (
                                 <Badge
                                   variant="outline"
-                                  className="text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 bg-blue-50 text-blue-700 rounded-md sm:rounded-lg"
+                                  className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-lg"
                                 >
                                   Default
                                 </Badge>
@@ -1814,7 +1698,7 @@ export default function FileManagerDepartmentPage() {
                               {!isFolder && file!.sharedWithMe && (
                                 <Badge
                                   variant="secondary"
-                                  className="text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 bg-blue-100 text-blue-700 rounded-md sm:rounded-lg"
+                                  className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-lg"
                                 >
                                   Shared
                                 </Badge>
@@ -1822,7 +1706,7 @@ export default function FileManagerDepartmentPage() {
                               {isFolder && (
                                 <Badge
                                   variant="secondary"
-                                  className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg ${
+                                  className={`text-xs px-2 py-1 rounded-lg ${
                                     folder!.isPublic || folder!.accessLevel === "public"
                                       ? "bg-green-100 text-green-700"
                                       : folder!.accessLevel === "private"
@@ -1838,34 +1722,30 @@ export default function FileManagerDepartmentPage() {
                                 </Badge>
                               )}
                             </div>
-                            <p className="text-xs sm:text-sm text-gray-500 truncate">{item.description}</p>
+                            <p className="text-sm text-gray-500 truncate">{item.description}</p>
                           </div>
                         </div>
-                        <div className="hidden md:flex items-center space-x-4 lg:space-x-8 text-xs sm:text-sm text-gray-500">
-                          <span className="w-20 lg:w-24 text-right font-medium">
+
+                        <div className="hidden md:flex items-center space-x-8 text-sm text-gray-500">
+                          <span className="w-24 text-right font-medium">
                             {isFolder ? `${folder!.fileCount || 0} files` : formatFileSize(file!.file.size)}
                           </span>
-                          <span className="w-24 lg:w-28 truncate">
-                            {isFolder ? folder!.accessLevel : file!.category}
-                          </span>
-                          <span className="w-28 lg:w-36 truncate">
+                          <span className="w-28 truncate">{isFolder ? folder!.accessLevel : file!.category}</span>
+                          <span className="w-36 truncate">
                             {item.createdBy ? `${item.createdBy.firstName} ${item.createdBy.lastName}` : "System"}
                           </span>
-                          <span className="w-24 lg:w-28 flex items-center gap-1">
+                          <span className="w-28 flex items-center gap-1">
                             <Clock className="w-3 h-3" />
                             {formatDate(item.createdAt)}
                           </span>
                         </div>
+
                         {!selectMode && (
-                          <div className="ml-3 sm:ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                          <div className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 sm:h-8 sm:w-8 p-0 rounded-lg sm:rounded-xl hover:bg-gray-200"
-                                >
-                                  <MoreHorizontal className="w-3 h-3 sm:w-4 sm:h-4" />
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-xl hover:bg-gray-200">
+                                  <MoreHorizontal className="w-4 h-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48">
@@ -1933,24 +1813,25 @@ export default function FileManagerDepartmentPage() {
                 </div>
               </div>
             )}
+
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
-                  <div className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-600">
                     Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
                     {Math.min(currentPage * ITEMS_PER_PAGE, filteredItems.length)} of {filteredItems.length} items
                   </div>
-                  <div className="flex items-center justify-center gap-2">
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="h-8 sm:h-10 px-2 sm:px-4 rounded-lg sm:rounded-xl text-xs sm:text-sm"
+                      className="h-10 px-4 rounded-xl"
                     >
-                      <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                      <span className="hidden sm:inline">Previous</span>
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Previous
                     </Button>
                     <div className="flex items-center gap-1">
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -1969,7 +1850,7 @@ export default function FileManagerDepartmentPage() {
                             variant={currentPage === pageNum ? "default" : "outline"}
                             size="sm"
                             onClick={() => setCurrentPage(pageNum)}
-                            className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl text-xs sm:text-sm ${currentPage === pageNum ? themeColors.primary : ""}`}
+                            className={`h-10 w-10 rounded-xl ${currentPage === pageNum ? themeColors.primary : ""}`}
                           >
                             {pageNum}
                           </Button>
@@ -1981,10 +1862,10 @@ export default function FileManagerDepartmentPage() {
                       size="sm"
                       onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      className="h-8 sm:h-10 px-2 sm:px-4 rounded-lg sm:rounded-xl text-xs sm:text-sm"
+                      className="h-10 px-4 rounded-xl"
                     >
-                      <span className="hidden sm:inline">Next</span>
-                      <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
+                      Next
+                      <ChevronRight className="w-4 h-4 ml-1" />
                     </Button>
                   </div>
                 </div>
@@ -1992,16 +1873,19 @@ export default function FileManagerDepartmentPage() {
             )}
           </>
         )}
+
         {/* All Modals */}
         {/* Create Folder Modal */}
         <Dialog open={showCreateFolderModal} onOpenChange={setShowCreateFolderModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold">Create New Folder</DialogTitle>
-              <DialogDescription>{getCreateFolderDescription()}</DialogDescription>
+              <DialogDescription>
+                Create a new folder {currentFolder ? `inside ${currentFolder.name}` : "in your accessible area"}
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="folder-name" className="text-sm font-medium">
                     Folder Name
@@ -2019,19 +1903,10 @@ export default function FileManagerDepartmentPage() {
                     Access Level
                   </Label>
                   <Select
-                    value={
-                      !currentFolder
-                        ? "private"
-                        : currentFolder.name === "Public" && currentFolder.isPublic
-                          ? "department"
-                          : currentFolder.accessLevel === "department"
-                            ? "public"
-                            : "private"
-                    }
+                    value={folderFormData.accessLevel}
                     onValueChange={(value: "public" | "department" | "private") =>
                       setFolderFormData((prev) => ({ ...prev, accessLevel: value }))
                     }
-                    disabled={true} // Disabled because access level is determined by location
                   >
                     <SelectTrigger className="mt-1 h-12 rounded-xl">
                       <SelectValue placeholder="Select access level" />
@@ -2042,7 +1917,6 @@ export default function FileManagerDepartmentPage() {
                       <SelectItem value="private">Private - Only you can access</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-gray-500 mt-1">{getCreateFolderAccessLevelText()}</p>
                 </div>
               </div>
               <div>
@@ -2058,6 +1932,37 @@ export default function FileManagerDepartmentPage() {
                   className="mt-1 rounded-xl"
                 />
               </div>
+              {folderFormData.accessLevel === "department" && (
+                <div>
+                  <Label className="text-sm font-medium">Select Departments</Label>
+                  <div className="mt-2 max-h-48 overflow-y-auto border rounded-xl p-4">
+                    {departments.map((dept) => (
+                      <div key={dept._id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded-lg">
+                        <Checkbox
+                          checked={folderFormData.departments.includes(dept._id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setFolderFormData((prev) => ({
+                                ...prev,
+                                departments: [...prev.departments, dept._id],
+                              }))
+                            } else {
+                              setFolderFormData((prev) => ({
+                                ...prev,
+                                departments: prev.departments.filter((id) => id !== dept._id),
+                              }))
+                            }
+                          }}
+                        />
+                        <Label className="text-sm cursor-pointer flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-blue-600" />
+                          {dept.name} ({dept.code})
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex gap-4 pt-4">
                 <Button
                   variant="outline"
@@ -2084,6 +1989,7 @@ export default function FileManagerDepartmentPage() {
             </div>
           </DialogContent>
         </Dialog>
+
         {/* Upload File Modal */}
         <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl">
@@ -2106,6 +2012,7 @@ export default function FileManagerDepartmentPage() {
             />
           </DialogContent>
         </Dialog>
+
         {/* Move Items Modal */}
         <Dialog open={showMoveModal} onOpenChange={setShowMoveModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
@@ -2166,6 +2073,7 @@ export default function FileManagerDepartmentPage() {
             </div>
           </DialogContent>
         </Dialog>
+
         {/* Bulk Delete Confirmation Dialog */}
         <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
           <AlertDialogContent className="rounded-2xl">
@@ -2196,6 +2104,7 @@ export default function FileManagerDepartmentPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
         {/* View File Modal */}
         <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
@@ -2212,7 +2121,7 @@ export default function FileManagerDepartmentPage() {
             </DialogHeader>
             {selectedFile && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-gray-50 rounded-xl">
                     <Label className="text-sm font-medium text-gray-600">File Name</Label>
                     <p className="text-sm font-semibold text-gray-900 mt-1">{selectedFile.file.name}</p>
@@ -2240,7 +2149,7 @@ export default function FileManagerDepartmentPage() {
                     </div>
                   </div>
                 )}
-                <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                <div className="flex gap-3 pt-4">
                   <Button variant="outline" asChild className="flex-1 h-12 rounded-xl bg-transparent">
                     <a href={selectedFile.file.url} target="_blank" rel="noopener noreferrer">
                       <Download className="w-4 h-4 mr-2" />
@@ -2271,6 +2180,7 @@ export default function FileManagerDepartmentPage() {
             )}
           </DialogContent>
         </Dialog>
+
         {/* View Folder Modal */}
         <Dialog open={showFolderViewModal} onOpenChange={setShowFolderViewModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
@@ -2287,7 +2197,7 @@ export default function FileManagerDepartmentPage() {
             </DialogHeader>
             {selectedFolder && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-gray-50 rounded-xl">
                     <Label className="text-sm font-medium text-gray-600">Folder Name</Label>
                     <p className="text-sm font-semibold text-gray-900 mt-1">{selectedFolder.name}</p>
@@ -2301,7 +2211,7 @@ export default function FileManagerDepartmentPage() {
                   <Label className="text-sm font-medium text-gray-600">Description</Label>
                   <p className="text-sm text-gray-900 mt-1">{selectedFolder.description}</p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-gray-50 rounded-xl">
                     <Label className="text-sm font-medium text-gray-600">Access Level</Label>
                     <div className="flex items-center gap-2 mt-1">
@@ -2316,7 +2226,7 @@ export default function FileManagerDepartmentPage() {
                     <p className="text-sm text-gray-900 mt-1">{new Date(selectedFolder.createdAt).toLocaleString()}</p>
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                <div className="flex gap-3 pt-4">
                   <Button
                     variant="outline"
                     className="flex-1 h-12 rounded-xl bg-transparent"
@@ -2346,6 +2256,7 @@ export default function FileManagerDepartmentPage() {
             )}
           </DialogContent>
         </Dialog>
+
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
           <AlertDialogContent className="rounded-2xl">
@@ -2380,6 +2291,7 @@ export default function FileManagerDepartmentPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
         {/* Edit File Modal */}
         <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
@@ -2389,7 +2301,7 @@ export default function FileManagerDepartmentPage() {
             </DialogHeader>
             {selectedFile && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="edit-title" className="text-sm font-medium">
                       Title
@@ -2478,6 +2390,7 @@ export default function FileManagerDepartmentPage() {
             )}
           </DialogContent>
         </Dialog>
+
         {/* Share Modal */}
         <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
           <DialogContent className="max-w-2xl rounded-2xl">

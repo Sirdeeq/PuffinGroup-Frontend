@@ -62,7 +62,7 @@ export function ResetPasswordModal({ open, onOpenChange, user }: ResetPasswordMo
       const response = await api.resetUserPassword(
         user._id,
         {
-          newPassword,
+         password: newPassword,
         },
         authContext,
       )
