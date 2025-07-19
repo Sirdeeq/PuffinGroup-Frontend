@@ -189,7 +189,7 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
 
   ]
 
-  const directorNavigation: NavItem[] = [
+  const directorNavigationBase: NavItem[] = [
     {
       name: "Files",
       icon: FileText,
@@ -234,7 +234,80 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
 
   ]
 
-  const departmentNavigation: NavItem[] = [
+  const directorNavigation: NavItem[] = (() => {
+    // Copy base nav to avoid mutation
+    const nav = [...directorNavigationBase]
+
+    // Check if the user is from HR department with given email
+    if (
+      // user.department?.toLowerCase() === "hr" &&
+      user.email.toLowerCase() === "gmd@puffingroupltd.com"
+    ) {
+      // Insert Attendance as the second item (index 1)
+      nav.splice(0, 0, {
+        name: "Attendance",
+        href: "/dashboard/attendance",
+        icon: Users,
+        key: "attendance",
+      })
+    }
+
+    return nav
+  })()
+
+  // const departmentNavigation: NavItem[] = [
+
+  //   {
+  //     name: "Files",
+  //     icon: FileText,
+  //     key: "files",
+  //     children: [
+  //       { name: "My Files", href: "/dashboard/files/myfiles", icon: Eye },
+  //       { name: "Received Files", href: "/dashboard/files/inbox", icon: Inbox },
+  //     ],
+  //   },
+  //   {
+  //     name: "Requests",
+  //     icon: MessageSquare,
+  //     key: "requests",
+  //     children: [
+  //       { name: "Create Request", href: "/dashboard/requests/create", icon: Plus },
+  //       { name: "My Requests", href: "/dashboard/requests", icon: Eye },
+  //       { name: "Received Requests", href: "/dashboard/requests/inbox", icon: Inbox },
+  //     ],
+  //   },
+  //   {
+  //     name: "Finance",
+  //     icon: Wallet,
+  //     key: "finance",
+  //     children: [
+  //       { name: "Petty Cash", href: "/dashboard/finance/pettycash", icon: Wallet },
+  //       // { name: "Expenses", href: "/dashboard/finance/expenses", icon: User },
+  //       // { name: "Invoices", href: "/dashboard/finance/invoices", icon: PenTool },
+  //     ],
+  //   },
+  //   {
+  //     name: "Meeting",
+  //     icon: Video,
+  //     key: "meeting",
+  //     href: "/dashboard/meeting",
+  //   },
+  //   {
+  //     name: "Settings",
+  //     icon: Settings,
+  //     key: "settings",
+  //     children: [
+  //       { name: "Profile", href: "/dashboard/settings/profile", icon: User },
+  //       { name: "Signature", href: "/dashboard/settings/signature", icon: PenTool },
+  //       { name: "Notifications", href: "/dashboard/settings/notifications", icon: Bell },
+  //       { name: "User Management", href: "/dashboard/settings/usermanagement", icon: Users },
+  //     ],
+  //   },
+
+  // ]
+
+  // 1. Define the base static navigation for department role
+  const departmentNavigationBase: NavItem[] = [
     {
       name: "Files",
       icon: FileText,
@@ -281,8 +354,30 @@ export default function EnhancedSidebar({ user, isMobile = false, onNavigate }: 
         { name: "User Management", href: "/dashboard/settings/usermanagement", icon: Users },
       ],
     },
-
   ]
+
+  const departmentNavigation: NavItem[] = (() => {
+    // Copy base nav to avoid mutation
+    const nav = [...departmentNavigationBase]
+
+    // Check if the user is from HR department with given email
+    if (
+      // user.department?.toLowerCase() === "hr" &&
+      user.email.toLowerCase() === "hr@puffingroupltd.com"
+    ) {
+      // Insert Attendance as the second item (index 1)
+      nav.splice(0, 0, {
+        name: "Attendance",
+        href: "/dashboard/attendance",
+        icon: Users,
+        key: "attendance",
+      })
+    }
+
+    return nav
+  })()
+
+  console.log("User ", user)
 
   const userNavigation: NavItem[] = [
     {
