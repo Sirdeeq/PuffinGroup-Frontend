@@ -17,7 +17,7 @@ interface User {
 }
 
 // Define API endpoints
-// export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend.onrender.com"
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend.onrender.com"
 // export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 // export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"
 // export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend-1.onrender.com"
