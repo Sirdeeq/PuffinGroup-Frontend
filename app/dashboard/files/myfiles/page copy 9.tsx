@@ -1,4 +1,5 @@
 "use client"
+
 import { useState, useEffect } from "react"
 import type React from "react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -236,21 +237,18 @@ export default function FileManagerDepartmentPage() {
     priority: "",
     departments: [] as string[],
   })
-
   const [shareFormData, setShareFormData] = useState({
     departments: [] as string[],
     users: [] as string[],
     message: "",
   })
-
   const [folderFormData, setFolderFormData] = useState({
     name: "",
     description: "",
-    accessLevel: "private" as "public" | "department" | "private",
-    departments: [] as string[],
+    accessLevel: "private" as "public" | "department" | "private", // This will be overridden by logic
+    departments: [] as string[], // This will be overridden by logic
     parentFolderId: "",
   })
-
   const [moveFormData, setMoveFormData] = useState({
     targetFolderId: "",
   })
@@ -296,17 +294,6 @@ export default function FileManagerDepartmentPage() {
           border: "border-green-200",
           accent: "bg-green-500",
         }
-      case "user": // Added support for regular users
-        return {
-          primary: "bg-gradient-to-r from-blue-500 to-blue-600",
-          primaryHover: "bg-gradient-to-r from-blue-600 to-blue-700",
-          bg: "bg-blue-50",
-          text: "text-blue-600",
-          badge: "bg-blue-100",
-          badgeText: "text-blue-800",
-          border: "border-blue-200",
-          accent: "bg-blue-500",
-        }
       default:
         return {
           primary: "bg-gradient-to-r from-blue-500 to-blue-600",
@@ -320,7 +307,6 @@ export default function FileManagerDepartmentPage() {
         }
     }
   }
-
   const themeColors = getThemeColor()
 
   // Redirect if not authenticated
@@ -328,33 +314,34 @@ export default function FileManagerDepartmentPage() {
     redirect("/login")
   }
 
+  // Check if user can create folders based on new logic
   const canCreateFolder = () => {
-    const userDeptId = authContext.user?.department?._id || authContext.user?.department
-    const userRole = authContext.user?.role
+    const userDeptId = authContext.user?.department
+    console.log(userDeptId)
 
     // Admin and director can create folders anywhere
-    if (userRole === "admin" || userRole === "director") {
+    if (authContext.user?.role === "admin" || authContext.user?.role === "director") {
       return true
     }
 
-    // Department users and regular users have similar permissions
-    if (userRole === "department" || userRole === "user") {
+    // Department users:
+    if (authContext.user?.role === "department") {
       // At root level (no current folder) - can create private folders
       if (!currentFolder) {
         return true
       }
-
+      
       // Inside Puffin Group's Public folder - can create department folders
       if (currentFolder.name === "Puffin Group" && currentFolder.isPublic) {
         return true
       }
-
+      
       // Inside department folder within Puffin Group's Public folder - can create folders if it's their department
       if (currentFolder.accessLevel === "public" && currentFolder.parentFolder?.name === "Puffin Group") {
         const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
         return isOwnDepartmentFolder
       }
-
+      
       // Inside a private folder - can create sub-private folders if they are the creator
       if (currentFolder.accessLevel === "private") {
         return currentFolder.createdBy?._id === authContext.user?._id
@@ -364,12 +351,12 @@ export default function FileManagerDepartmentPage() {
     return false
   }
 
+  // Check if user can upload files
   const canUploadFiles = () => {
     const userDeptId = authContext.user?.department?._id || authContext.user?.department
-    const userRole = authContext.user?.role
 
     // Admin and director can upload anywhere
-    if (userRole === "admin" || userRole === "director") {
+    if (authContext.user?.role === "admin" || authContext.user?.role === "director") {
       return true
     }
 
@@ -378,23 +365,20 @@ export default function FileManagerDepartmentPage() {
       return false
     }
 
-    // Department users and regular users have similar upload permissions
-    if (userRole === "department" || userRole === "user") {
-      // Inside "Public" folder (which is a default public folder) - allow uploads
-      if (currentFolder.name === "Public" && currentFolder.isPublic) {
-        return true
-      }
+    // Inside "Public" folder (which is a default public folder) - allow uploads
+    if (currentFolder.name === "Public" && currentFolder.isPublic) {
+      return true
+    }
 
-      // Inside a department folder - allow uploads if it's their own department's folder
-      if (currentFolder.accessLevel === "department") {
-        const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
-        return isOwnDepartmentFolder
-      }
+    // Inside a department folder - allow uploads if it's their own department's folder
+    if (currentFolder.accessLevel === "department") {
+      const isOwnDepartmentFolder = currentFolder.departments.some((dept) => dept._id === userDeptId)
+      return isOwnDepartmentFolder
+    }
 
-      // Inside a private folder - allow uploads if they are the creator
-      if (currentFolder.accessLevel === "private") {
-        return currentFolder.createdBy?._id === authContext.user?._id
-      }
+    // Inside a private folder - allow uploads if they are the creator
+    if (currentFolder.accessLevel === "private") {
+      return currentFolder.createdBy?._id === authContext.user?._id
     }
 
     return false
@@ -427,7 +411,6 @@ export default function FileManagerDepartmentPage() {
   const getFileIcon = (fileType: string, fileName: string) => {
     const type = fileType.toLowerCase()
     const extension = fileName.split(".").pop()?.toLowerCase()
-
     if (type.includes("image") || ["jpg", "jpeg", "png", "gif", "svg", "webp"].includes(extension || "")) {
       return <ImageIcon className="w-8 h-8 text-blue-500" />
     }
@@ -464,125 +447,12 @@ export default function FileManagerDepartmentPage() {
     }
   }
 
-  // const fetchData = async () => {
-  //   try {
-  //     setLoading(true)
-  //     console.log("Fetching data for folder:", currentFolder?._id || "root")
-  //     const departmentId = authContext.user?.department?._id || authContext.user?.department
-  //     const userRole = authContext.user?.role
-
-  //     // Build query parameters based on current folder
-  //     const folderParams: any = {}
-  //     if (currentFolder) {
-  //       folderParams.parentId = currentFolder._id
-  //     } else {
-  //       folderParams.parentId = "root"
-  //     }
-
-  //     // Include department-specific data for both department and regular users
-  //     if ((userRole === "department" || userRole === "user") && departmentId) {
-  //       folderParams.includeAll = true
-  //     }
-
-  //     // Fetch folders
-  //     const foldersResponse = await api.getFolders(folderParams, authContext)
-  //     console.log("Folders response:", foldersResponse)
-
-  //     if (foldersResponse.success && foldersResponse.data?.data) {
-  //       const fetchedFolders = Array.isArray(foldersResponse.data.data)
-  //         ? foldersResponse.data.data
-  //         : foldersResponse.data.data.folders || []
-
-  //       console.log("Setting folders:", fetchedFolders)
-  //       const processedFolders = fetchedFolders.map((folder: any) => ({
-  //         ...folder,
-  //         fileCount: folder.fileCount || 0,
-  //         folderCount: folder.folderCount || 0,
-  //         canEdit: folder.canEdit !== false,
-  //         canDelete: folder.canDelete !== false && !folder.isDefault,
-  //         canShare: folder.canShare !== false,
-  //         canUpload: folder.canUpload !== false,
-  //         canCreateSubfolder: folder.canCreateSubfolder !== false,
-  //       }))
-  //       setFolders(processedFolders)
-  //     }
-
-  //     // Fetch files
-  //     const filesParams: any = currentFolder ? { folderId: currentFolder._id } : {}
-
-  //     // Include department filter for both department and regular users
-  //     if ((userRole === "department" || userRole === "user") && departmentId) {
-  //       filesParams.department = departmentId
-  //     }
-
-  //     const filesResponse = await api.getFiles(filesParams, authContext)
-  //     console.log("Files response:", filesResponse)
-
-  //     if (filesResponse.success && filesResponse.data) {
-  //       const filesData = Array.isArray(filesResponse.data) ? filesResponse.data : filesResponse.data.files || []
-  //       const processedFiles = filesData.map((file: any) => ({
-  //         ...file,
-  //         name: file.name || file.title || "Untitled",
-  //         title: file.title || file.name || "Untitled",
-  //         description: file.description || "No description",
-  //         category: file.category || "Uncategorized",
-  //         status: file.status || "draft",
-  //         priority: file.priority || null,
-  //         createdBy: {
-  //           _id: file.createdBy?._id || "",
-  //           firstName: file.createdBy?.firstName || "Unknown",
-  //           lastName: file.createdBy?.lastName || "User",
-  //           email: file.createdBy?.email || "",
-  //           position: file.createdBy?.position || "",
-  //         },
-  //         file: {
-  //           name: file.file?.name || "Unknown file",
-  //           url: file.file?.url || "",
-  //           size: file.file?.size || 0,
-  //           type: file.file?.type || "",
-  //         },
-  //         folder: file.folder || null,
-  //         departments: file.departments || [],
-  //         isInPublicFolder: file.folder?.isPublic || false,
-  //         canEdit:
-  //           file.createdBy?._id === authContext.user?._id ||
-  //           userRole === "admin" ||
-  //           (userRole === "department" && file.departments?.some((dept: any) => dept._id === departmentId)),
-  //         canDelete:
-  //           file.createdBy?._id === authContext.user?._id ||
-  //           userRole === "admin" ||
-  //           (userRole === "department" && file.departments?.some((dept: any) => dept._id === departmentId)),
-  //         canShare: file.canShare !== false,
-  //       }))
-  //       console.log("Setting files:", processedFiles)
-  //       setFiles(processedFiles)
-  //     }
-
-  //     // Fetch breadcrumb if in a folder
-  //     if (currentFolder) {
-  //       await fetchBreadcrumb(currentFolder._id)
-  //     } else {
-  //       setBreadcrumb([])
-  //     }
-  //   } catch (error: any) {
-  //     console.error("Error fetching data:", error)
-  //     toast({
-  //       title: "Error",
-  //       description: error.message || "Failed to load data",
-  //       variant: "destructive",
-  //     })
-  //   } finally {
-  //     setLoading(false)
-  //   }
-  // }
-
-  // Fetch breadcrumb path
+  // Fetch folders and files with updated logic
   const fetchData = async () => {
     try {
       setLoading(true)
       console.log("Fetching data for folder:", currentFolder?._id || "root")
       const departmentId = authContext.user?.department?._id || authContext.user?.department
-      const userRole = authContext.user?.role
 
       // Build query parameters based on current folder
       const folderParams: any = {}
@@ -591,21 +461,17 @@ export default function FileManagerDepartmentPage() {
       } else {
         folderParams.parentId = "root"
       }
-
-      // Include department-specific data for both department and regular users
-      if ((userRole === "department" || userRole === "user") && departmentId) {
+      if (authContext.user?.role === "department" && departmentId) {
         folderParams.includeAll = true
       }
 
       // Fetch folders
       const foldersResponse = await api.getFolders(folderParams, authContext)
       console.log("Folders response:", foldersResponse)
-
       if (foldersResponse.success && foldersResponse.data?.data) {
         const fetchedFolders = Array.isArray(foldersResponse.data.data)
           ? foldersResponse.data.data
           : foldersResponse.data.data.folders || []
-
         console.log("Setting folders:", fetchedFolders)
         const processedFolders = fetchedFolders.map((folder: any) => ({
           ...folder,
@@ -622,15 +488,11 @@ export default function FileManagerDepartmentPage() {
 
       // Fetch files
       const filesParams: any = currentFolder ? { folderId: currentFolder._id } : {}
-
-      // Include department filter for both department and regular users
-      if ((userRole === "department" || userRole === "user") && departmentId) {
+      if (authContext.user?.role === "department" && departmentId) {
         filesParams.department = departmentId
       }
-
       const filesResponse = await api.getFiles(filesParams, authContext)
       console.log("Files response:", filesResponse)
-
       if (filesResponse.success && filesResponse.data) {
         const filesData = Array.isArray(filesResponse.data) ? filesResponse.data : filesResponse.data.files || []
         const processedFiles = filesData.map((file: any) => ({
@@ -657,14 +519,8 @@ export default function FileManagerDepartmentPage() {
           folder: file.folder || null,
           departments: file.departments || [],
           isInPublicFolder: file.folder?.isPublic || false,
-          canEdit:
-            file.createdBy?._id === authContext.user?._id ||
-            userRole === "admin" ||
-            (userRole === "department" && file.departments?.some((dept: any) => dept._id === departmentId)),
-          canDelete:
-            file.createdBy?._id === authContext.user?._id ||
-            userRole === "admin" ||
-            (userRole === "department" && file.departments?.some((dept: any) => dept._id === departmentId)),
+          canEdit: file.createdBy?._id === authContext.user?._id || authContext.user?.role === "admin",
+          canDelete: file.createdBy?._id === authContext.user?._id || authContext.user?.role === "admin",
           canShare: file.canShare !== false,
         }))
         console.log("Setting files:", processedFiles)
@@ -689,6 +545,7 @@ export default function FileManagerDepartmentPage() {
     }
   }
 
+  // Fetch breadcrumb path
   const fetchBreadcrumb = async (folderId: string) => {
     try {
       const response = await api.getBreadcrumbPath(folderId, authContext)
@@ -708,16 +565,13 @@ export default function FileManagerDepartmentPage() {
         api.getUsers(authContext),
         api.getFolders({ includeAll: true }, authContext),
       ])
-
       if (deptResponse.success && deptResponse.data) {
         setDepartments(deptResponse.data.departments || [])
       }
-
       if (usersResponse.success && usersResponse.data) {
         const filteredUsers = (usersResponse.data.users || []).filter((user) => user.role === "user")
         setUsers(filteredUsers)
       }
-
       if (foldersResponse.success && foldersResponse.data) {
         const allFolders = Array.isArray(foldersResponse.data)
           ? foldersResponse.data
@@ -737,203 +591,28 @@ export default function FileManagerDepartmentPage() {
     }
   }, [authContext, currentFolder])
 
-  // useEffect(() => {
-  //   console.log("Filtering items. Current folder:", currentFolder?._id)
-  //   console.log("Available folders:", folders)
-  //   console.log("Available files:", files)
-
-  //   const userRole = authContext.user?.role
-  //   const userDeptId = authContext.user?.department?._id || authContext.user?.department
-
-  //   let items: (FileData | FolderData)[] = []
-
-  //   if (!currentFolder) {
-  //     // At root level: show accessible folders based on user role
-  //     const accessibleFolders = folders.filter((folder) => {
-  //       // Admin and director see everything
-  //       if (userRole === "admin" || userRole === "director") {
-  //         return true
-  //       }
-
-  //       // Show public folders
-  //       if (folder.isPublic || folder.accessLevel === "public") {
-  //         return true
-  //       }
-
-  //       // Show department folders if user belongs to that department
-  //       if (folder.accessLevel === "department") {
-  //         return folder.departments.some((dept) => dept._id === userDeptId)
-  //       }
-
-  //       // Show private folders created by the user
-  //       if (folder.accessLevel === "private" && folder.createdBy?._id === authContext.user?._id) {
-  //         return true
-  //       }
-
-  //       return false
-  //     })
-
-  //     items = [...accessibleFolders]
-  //     console.log("Root level items:", items)
-  //   } else {
-  //     // In a specific folder: show subfolders and files in that folder
-  //     const subfolders = folders.filter(
-  //       (folder) => folder.parentFolder && folder.parentFolder._id === currentFolder._id,
-  //     )
-
-  //     // Filter files based on user permissions
-  //     const folderFiles = files.filter((file) => {
-  //       if (!file.folder || file.folder._id !== currentFolder._id) {
-  //         return false
-  //       }
-
-  //       // Admin and director see all files
-  //       if (userRole === "admin" || userRole === "director") {
-  //         return true
-  //       }
-
-  //       // Users see files they created or files shared with their department
-  //       if (userRole === "department" || userRole === "user") {
-  //         // Files created by the user
-  //         if (file.createdBy._id === authContext.user?._id) {
-  //           return true
-  //         }
-
-  //         // Files in public folders
-  //         if (file.isInPublicFolder) {
-  //           return true
-  //         }
-
-  //         // Files shared with user's department
-  //         if (file.departments.some((dept) => dept._id === userDeptId)) {
-  //           return true
-  //         }
-
-  //         // Files marked as shared with the user
-  //         if (file.sharedWithMe) {
-  //           return true
-  //         }
-  //       }
-
-  //       return false
-  //     })
-
-  //     items = [...subfolders, ...folderFiles]
-  //     console.log("Folder items:", items)
-  //   }
-
-  //   // Filter by search term
-  //   const filtered = items.filter((item) => {
-  //     const name = "name" in item ? item.name : item.title || ""
-  //     const description = item.description || ""
-  //     const createdBy = item.createdBy ? `${item.createdBy.firstName} ${item.createdBy.lastName}` : ""
-  //     return (
-  //       name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  //       description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  //       createdBy.toLowerCase().includes(searchTerm.toLowerCase())
-  //     )
-  //   })
-
-  //   // Sort items - folders first, then files
-  //   filtered.sort((a, b) => {
-  //     const aIsFolder = !("file" in a)
-  //     const bIsFolder = !("file" in b)
-
-  //     // Always show folders before files
-  //     if (aIsFolder && !bIsFolder) return -1
-  //     if (!aIsFolder && bIsFolder) return 1
-
-  //     let aValue: any, bValue: any
-  //     switch (sortBy) {
-  //       case "name":
-  //         aValue = ("name" in a ? a.name : a.title || "").toLowerCase()
-  //         bValue = ("name" in b ? b.name : b.title || "").toLowerCase()
-  //         break
-  //       case "date":
-  //         aValue = new Date(a.createdAt)
-  //         bValue = new Date(b.createdAt)
-  //         break
-  //       case "size":
-  //         aValue = "file" in a ? a.file.size : 0
-  //         bValue = "file" in b ? b.file.size : 0
-  //         break
-  //       case "type":
-  //         aValue = "file" in a ? a.file.type.toLowerCase() : "folder"
-  //         bValue = "file" in b ? b.file.type.toLowerCase() : "folder"
-  //         break
-  //       default:
-  //         return 0
-  //     }
-
-  //     if (sortDirection === "asc") {
-  //       return aValue > bValue ? 1 : -1
-  //     } else {
-  //       return aValue < bValue ? 1 : -1
-  //     }
-  //   })
-
-  //   console.log("Filtered and sorted items:", filtered)
-  //   setFilteredItems(filtered)
-
-  //   // Calculate pagination
-  //   const totalItems = filtered.length
-  //   const pages = Math.ceil(totalItems / ITEMS_PER_PAGE)
-  //   setTotalPages(pages)
-
-  //   // Reset to first page if current page is out of bounds
-  //   if (currentPage > pages && pages > 0) {
-  //     setCurrentPage(1)
-  //   }
-
-  //   // Get items for current page
-  //   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-  //   const endIndex = startIndex + ITEMS_PER_PAGE
-  //   const paginatedResult = filtered.slice(startIndex, endIndex)
-  //   console.log("Paginated items:", paginatedResult)
-  //   setPaginatedItems(paginatedResult)
-  // }, [files, folders, searchTerm, sortBy, sortDirection, currentFolder, currentPage, authContext.user])
-
+  // Search, sort, and paginate items
   useEffect(() => {
     console.log("Filtering items. Current folder:", currentFolder?._id)
     console.log("Available folders:", folders)
     console.log("Available files:", files)
-
-    const userRole = authContext.user?.role
-    const userDeptId = authContext.user?.department?._id || authContext.user?.department
-
     let items: (FileData | FolderData)[] = []
-
     if (!currentFolder) {
-      // At root level: show accessible folders based on user role
+      // At root level: show public folder and private folders created by user
       const accessibleFolders = folders.filter((folder) => {
-        // Admin and director see everything
-        if (userRole === "admin" || userRole === "director") {
-          return true
-        }
-
-        if (userRole === "department" || userRole === "user") {
-          // Show public default folders first (like "Puffin Group")
-          if (folder.isDefault && folder.isPublic) {
-            return true
-          }
-
-          // Show private folders created by the user
-          if (folder.accessLevel === "private" && folder.createdBy?._id === authContext.user?._id) {
-            return true
-          }
-
-          // Don't show other public or department folders at root level for regular users
-          return false
-        }
-
-        // Fallback for other roles - show public folders
+        // Show public folders
         if (folder.isPublic || folder.accessLevel === "public") {
           return true
         }
-
+        if (folder.accessLevel === "department") {
+          return true
+        }
+        // Show private folders created by the user
+        if (folder.accessLevel === "private" && folder.createdBy?._id === authContext.user?._id) {
+          return true
+        }
         return false
       })
-
       items = [...accessibleFolders]
       console.log("Root level items:", items)
     } else {
@@ -941,44 +620,7 @@ export default function FileManagerDepartmentPage() {
       const subfolders = folders.filter(
         (folder) => folder.parentFolder && folder.parentFolder._id === currentFolder._id,
       )
-
-      // Filter files based on user permissions
-      const folderFiles = files.filter((file) => {
-        if (!file.folder || file.folder._id !== currentFolder._id) {
-          return false
-        }
-
-        // Admin and director see all files
-        if (userRole === "admin" || userRole === "director") {
-          return true
-        }
-
-        // Users see files they created or files shared with their department
-        if (userRole === "department" || userRole === "user") {
-          // Files created by the user
-          if (file.createdBy._id === authContext.user?._id) {
-            return true
-          }
-
-          // Files in public folders
-          if (file.isInPublicFolder) {
-            return true
-          }
-
-          // Files shared with user's department
-          if (file.departments.some((dept) => dept._id === userDeptId)) {
-            return true
-          }
-
-          // Files marked as shared with the user
-          if (file.sharedWithMe) {
-            return true
-          }
-        }
-
-        return false
-      })
-
+      const folderFiles = files.filter((file) => file.folder && file.folder._id === currentFolder._id)
       items = [...subfolders, ...folderFiles]
       console.log("Folder items:", items)
     }
@@ -999,7 +641,6 @@ export default function FileManagerDepartmentPage() {
     filtered.sort((a, b) => {
       const aIsFolder = !("file" in a)
       const bIsFolder = !("file" in b)
-
       // Always show folders before files
       if (aIsFolder && !bIsFolder) return -1
       if (!aIsFolder && bIsFolder) return 1
@@ -1040,7 +681,6 @@ export default function FileManagerDepartmentPage() {
     const totalItems = filtered.length
     const pages = Math.ceil(totalItems / ITEMS_PER_PAGE)
     setTotalPages(pages)
-
     // Reset to first page if current page is out of bounds
     if (currentPage > pages && pages > 0) {
       setCurrentPage(1)
@@ -1117,7 +757,6 @@ export default function FileManagerDepartmentPage() {
     try {
       setIsProcessing(true)
       const userDeptId = authContext.user?.department?._id || authContext.user?.department
-
       let newAccessLevel: "public" | "department" | "private" = "public"
       let newDepartments: string[] = []
 
@@ -1157,7 +796,7 @@ export default function FileManagerDepartmentPage() {
         setFolderFormData({
           name: "",
           description: "",
-          accessLevel: "public",
+          accessLevel: "public", // Reset to default, will be overridden
           departments: [],
           parentFolderId: "",
         })
@@ -1178,7 +817,6 @@ export default function FileManagerDepartmentPage() {
 
   const handleDeleteFile = async () => {
     if (!selectedFile) return
-
     try {
       setIsProcessing(true)
       const response = await api.deleteFile(selectedFile._id, authContext)
@@ -1206,7 +844,6 @@ export default function FileManagerDepartmentPage() {
 
   const handleDeleteFolder = async () => {
     if (!selectedFolder) return
-
     try {
       setIsProcessing(true)
       const response = await api.deleteFolder(selectedFolder._id, authContext)
@@ -1238,14 +875,12 @@ export default function FileManagerDepartmentPage() {
       const promises = selectedItems.map(async (itemId) => {
         const item = paginatedItems.find((i) => i._id === itemId)
         if (!item) return
-
         if ("file" in item) {
           return api.deleteFile(itemId, authContext)
         } else {
           return api.deleteFolder(itemId, authContext)
         }
       })
-
       await Promise.all(promises)
       toast({
         title: "Success",
@@ -1272,10 +907,8 @@ export default function FileManagerDepartmentPage() {
       const promises = selectedItems.map(async (itemId) => {
         const item = paginatedItems.find((i) => i._id === itemId)
         if (!item || !("file" in item)) return // Only move files for now
-
         return api.moveFile(itemId, moveFormData.targetFolderId, authContext)
       })
-
       await Promise.all(promises)
       toast({
         title: "Success",
@@ -1317,9 +950,7 @@ export default function FileManagerDepartmentPage() {
   const handleDrop = async (e: React.DragEvent, targetFolder: FolderData) => {
     e.preventDefault()
     setIsDragOver(null)
-
     if (!draggedFile) return
-
     try {
       setIsProcessing(true)
       const response = await api.moveFile(draggedFile._id, targetFolder._id, authContext)
@@ -1358,7 +989,6 @@ export default function FileManagerDepartmentPage() {
     const now = new Date()
     const diffTime = Math.abs(now.getTime() - date.getTime())
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-
     if (diffDays === 1) return "Today"
     if (diffDays === 2) return "Yesterday"
     if (diffDays <= 7) return `${diffDays - 1} days ago`
@@ -1434,7 +1064,6 @@ export default function FileManagerDepartmentPage() {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-
       toast({
         title: "Download started",
         description: `Downloading ${file.file.name}`,
@@ -1451,7 +1080,6 @@ export default function FileManagerDepartmentPage() {
   // Edit and Share handlers
   const handleEditSubmit = async () => {
     if (!selectedFile) return
-
     try {
       setIsProcessing(true)
       const response = await api.updateFile(selectedFile._id, editFormData, authContext)
@@ -1481,17 +1109,14 @@ export default function FileManagerDepartmentPage() {
       setIsProcessing(true)
       const itemId = selectedFile?._id || selectedFolder?._id
       if (!itemId) return
-
       const shareData = {
         departments: shareFormData.departments,
         users: shareFormData.users,
         message: shareFormData.message,
       }
-
       const response = selectedFile
         ? await api.shareFile(itemId, shareData, authContext)
         : await api.shareFolder(itemId, shareData, authContext)
-
       if (response.success) {
         toast({
           title: "Success",
@@ -1552,7 +1177,6 @@ export default function FileManagerDepartmentPage() {
   const renderBreadcrumb = () => {
     const maxVisible = 3
     const showDots = breadcrumb.length > maxVisible
-
     return (
       <div className="flex items-center gap-1 text-sm overflow-x-auto">
         <Home className="w-4 h-4 text-gray-500 flex-shrink-0" />
@@ -1562,7 +1186,6 @@ export default function FileManagerDepartmentPage() {
         >
           Public
         </button>
-
         {breadcrumb.length > 0 && (
           <>
             {showDots && breadcrumb.length > maxVisible && (
@@ -1590,10 +1213,11 @@ export default function FileManagerDepartmentPage() {
                 <ChevronRight className="w-4 h-4 text-gray-400" />
                 <button
                   onClick={() => navigateToBreadcrumb(item, showDots ? breadcrumb.length - arr.length + index : index)}
-                  className={`hover:text-blue-600 transition-colors px-2 py-1 rounded-lg whitespace-nowrap ${index === arr.length - 1
-                    ? `font-medium ${themeColors.text} bg-blue-50`
-                    : "text-gray-600 hover:bg-blue-50"
-                    }`}
+                  className={`hover:text-blue-600 transition-colors px-2 py-1 rounded-lg whitespace-nowrap ${
+                    index === arr.length - 1
+                      ? `font-medium ${themeColors.text} bg-blue-50`
+                      : "text-gray-600 hover:bg-blue-50"
+                  }`}
                 >
                   {item.name}
                 </button>
@@ -1665,12 +1289,13 @@ export default function FileManagerDepartmentPage() {
                 {currentFolder && (
                   <Badge
                     variant="secondary"
-                    className={`text-xs px-2 py-1 rounded-lg hidden sm:inline-flex ${currentFolder.isPublic || currentFolder.accessLevel === "public"
-                      ? "bg-green-100 text-green-700"
-                      : currentFolder.accessLevel === "private"
-                        ? "bg-red-100 text-red-700"
-                        : "bg-orange-100 text-orange-700"
-                      }`}
+                    className={`text-xs px-2 py-1 rounded-lg hidden sm:inline-flex ${
+                      currentFolder.isPublic || currentFolder.accessLevel === "public"
+                        ? "bg-green-100 text-green-700"
+                        : currentFolder.accessLevel === "private"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-orange-100 text-orange-700"
+                    }`}
                   >
                     {currentFolder.isPublic || currentFolder.accessLevel === "public"
                       ? "Public"
@@ -1684,26 +1309,24 @@ export default function FileManagerDepartmentPage() {
                 {currentFolder ? currentFolder.description : "Access public folders and your department's files"}
               </p>
             </div>
-
             {/* Right side - Action buttons */}
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Notification Bell */}
               {renderNotificationBell()}
-
               {/* Selection Mode Toggle */}
               {paginatedItems.length > 0 && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={toggleSelectMode}
-                  className={`flex items-center gap-1 sm:gap-2 transition-all duration-200 h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm ${selectMode ? `${themeColors.primary} text-white` : "hover:bg-gray-50 bg-transparent"
-                    }`}
+                  className={`flex items-center gap-1 sm:gap-2 transition-all duration-200 h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm ${
+                    selectMode ? `${themeColors.primary} text-white` : "hover:bg-gray-50 bg-transparent"
+                  }`}
                 >
                   <Check className="w-3 h-3 sm:w-4 sm:h-4" />
                   <span className="hidden sm:inline">{selectMode ? "Exit Select" : "Select"}</span>
                 </Button>
               )}
-
               {/* Refresh Button */}
               <Button
                 variant="outline"
@@ -1715,7 +1338,6 @@ export default function FileManagerDepartmentPage() {
                 <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 ${loading ? "animate-spin" : ""}`} />
                 <span className="hidden sm:inline text-xs sm:text-sm">Refresh</span>
               </Button>
-
               {/* Items Count Badge */}
               <Badge
                 variant="outline"
@@ -1724,22 +1346,20 @@ export default function FileManagerDepartmentPage() {
                 <span className="font-medium">{filteredItems.length}</span>
                 <span className="hidden sm:inline ml-1">Items</span>
               </Badge>
-
               {/* New Folder Button */}
               <Button
                 variant="outline"
                 onClick={() => setShowCreateFolderModal(true)}
-                disabled={!canCreateFolder()}
+                // disabled={!canCreateFolder()}
                 className="flex items-center gap-1 sm:gap-2 hover:bg-gray-50 transition-all duration-200 h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm"
               >
                 <FolderPlus className="w-3 h-3 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">New Folder</span>
               </Button>
-
               {/* Upload File Button */}
               <Button
                 onClick={() => setShowUploadModal(true)}
-                disabled={!canUploadFiles()}
+                // disabled={!canUploadFiles()}
                 className={`${themeColors.primary} hover:${themeColors.primaryHover} text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm`}
               >
                 <Plus className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
@@ -1748,8 +1368,6 @@ export default function FileManagerDepartmentPage() {
             </div>
           </div>
         </div>
-
-        {/* ... rest of the existing code remains the same ... */}
         {/* Breadcrumb Navigation */}
         <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
@@ -1782,7 +1400,6 @@ export default function FileManagerDepartmentPage() {
             )}
           </div>
         </div>
-
         {/* Selection Actions Bar */}
         {selectMode && selectedItems.length > 0 && (
           <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
@@ -1842,7 +1459,6 @@ export default function FileManagerDepartmentPage() {
             </div>
           </div>
         )}
-
         {/* Enhanced Search and Controls */}
         <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4 lg:gap-6">
@@ -1888,15 +1504,15 @@ export default function FileManagerDepartmentPage() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-
               {/* View Toggle */}
               <div className="flex items-center bg-gray-100 rounded-xl p-1">
                 <Button
                   variant={viewMode === "grid" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("grid")}
-                  className={`h-8 sm:h-10 px-3 sm:px-4 rounded-lg transition-all duration-200 ${viewMode === "grid" ? themeColors.primary : "hover:bg-gray-200"
-                    }`}
+                  className={`h-8 sm:h-10 px-3 sm:px-4 rounded-lg transition-all duration-200 ${
+                    viewMode === "grid" ? themeColors.primary : "hover:bg-gray-200"
+                  }`}
                 >
                   <Grid3X3 className="w-3 h-3 sm:w-4 sm:h-4" />
                 </Button>
@@ -1904,8 +1520,9 @@ export default function FileManagerDepartmentPage() {
                   variant={viewMode === "list" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("list")}
-                  className={`h-8 sm:h-10 px-3 sm:px-4 rounded-lg transition-all duration-200 ${viewMode === "list" ? themeColors.primary : "hover:bg-gray-200"
-                    }`}
+                  className={`h-8 sm:h-10 px-3 sm:px-4 rounded-lg transition-all duration-200 ${
+                    viewMode === "list" ? themeColors.primary : "hover:bg-gray-200"
+                  }`}
                 >
                   <List className="w-3 h-3 sm:w-4 sm:h-4" />
                 </Button>
@@ -1913,7 +1530,6 @@ export default function FileManagerDepartmentPage() {
             </div>
           </div>
         </div>
-
         {/* Items Display */}
         {paginatedItems.length === 0 ? (
           <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200">
@@ -1964,13 +1580,14 @@ export default function FileManagerDepartmentPage() {
                   const folder = isFolder ? (item as FolderData) : null
                   const file = !isFolder ? (item as FileData) : null
                   const isSelected = selectedItems.includes(item._id)
-
                   return (
                     <Card
                       key={item._id}
-                      className={`group relative cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-0 shadow-md bg-white rounded-xl sm:rounded-2xl overflow-hidden ${draggedFile && isFolder ? `ring-2 ring-blue-400 ${themeColors.bg} transform scale-105` : ""
-                        } ${isDragOver === item._id ? "ring-2 ring-blue-400 bg-blue-50" : ""} ${isSelected ? `ring-2 ${themeColors.border} ${themeColors.bg}` : ""
-                        }`}
+                      className={`group relative cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-0 shadow-md bg-white rounded-xl sm:rounded-2xl overflow-hidden ${
+                        draggedFile && isFolder ? `ring-2 ring-blue-400 ${themeColors.bg} transform scale-105` : ""
+                      } ${isDragOver === item._id ? "ring-2 ring-blue-400 bg-blue-50" : ""} ${
+                        isSelected ? `ring-2 ${themeColors.border} ${themeColors.bg}` : ""
+                      }`}
                       onClick={(e) => {
                         if (selectMode) {
                           e.stopPropagation()
@@ -1996,7 +1613,6 @@ export default function FileManagerDepartmentPage() {
                             />
                           </div>
                         )}
-
                         <div className="mb-3 sm:mb-4 flex justify-center">
                           <div className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
                             {isFolder
@@ -2004,19 +1620,16 @@ export default function FileManagerDepartmentPage() {
                               : getFileIcon(file!.file.type, file!.file.name)}
                           </div>
                         </div>
-
                         <h3
                           className="font-semibold text-xs sm:text-sm text-gray-900 truncate mb-1 sm:mb-2 group-hover:text-blue-600 transition-colors duration-200"
                           title={isFolder ? folder!.name : file!.name}
                         >
                           {isFolder ? folder!.name : file!.name}
                         </h3>
-
                         <div className="flex items-center justify-center gap-1 text-xs text-gray-400">
                           <Clock className="w-3 h-3" />
                           {formatDate(item.createdAt)}
                         </div>
-
                         {/* Action Menu */}
                         {!selectMode && (
                           <div className="absolute top-2 sm:top-3 right-2 sm:right-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
@@ -2080,27 +1693,27 @@ export default function FileManagerDepartmentPage() {
                                 )}
                                 {((isFolder && folder!.canDelete && !folder!.isDefault) ||
                                   (!isFolder && file!.canDelete)) && (
-                                    <DropdownMenuItem onClick={() => openDeleteDialog(item)} className="text-red-600">
-                                      <Trash2 className="w-4 h-4 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  )}
+                                  <DropdownMenuItem onClick={() => openDeleteDialog(item)} className="text-red-600">
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
                         )}
-
                         {/* Status Indicators */}
                         <div className="absolute top-2 sm:top-3 left-2 sm:left-3 flex flex-col gap-1">
                           {isFolder && (
                             <Badge
                               variant="secondary"
-                              className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg ${folder!.isPublic || folder!.accessLevel === "public"
-                                ? "bg-green-100 text-green-700"
-                                : folder!.accessLevel === "private"
-                                  ? "bg-red-100 text-red-700"
-                                  : "bg-orange-100 text-orange-700"
-                                }`}
+                              className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg ${
+                                folder!.isPublic || folder!.accessLevel === "public"
+                                  ? "bg-green-100 text-green-700"
+                                  : folder!.accessLevel === "private"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-orange-100 text-orange-700"
+                              }`}
                             >
                               {folder!.isPublic || folder!.accessLevel === "public"
                                 ? "Public"
@@ -2126,7 +1739,6 @@ export default function FileManagerDepartmentPage() {
                             </Badge>
                           )}
                         </div>
-
                         {/* Drag indicator for files */}
                         {!isFolder && !selectMode && (
                           <div
@@ -2141,7 +1753,6 @@ export default function FileManagerDepartmentPage() {
                 })}
               </div>
             )}
-
             {/* List View */}
             {viewMode === "list" && (
               <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -2151,13 +1762,14 @@ export default function FileManagerDepartmentPage() {
                     const folder = isFolder ? (item as FolderData) : null
                     const file = !isFolder ? (item as FileData) : null
                     const isSelected = selectedItems.includes(item._id)
-
                     return (
                       <div
                         key={item._id}
-                        className={`flex items-center p-3 sm:p-4 lg:p-6 hover:bg-gray-50 cursor-pointer group transition-all duration-200 ${draggedFile && isFolder ? "bg-blue-50 border-l-4 border-blue-400" : ""
-                          } ${isDragOver === item._id ? "bg-blue-50 border-l-4 border-blue-400" : ""} ${isSelected ? `${themeColors.bg} border-l-4 ${themeColors.border}` : ""
-                          }`}
+                        className={`flex items-center p-3 sm:p-4 lg:p-6 hover:bg-gray-50 cursor-pointer group transition-all duration-200 ${
+                          draggedFile && isFolder ? "bg-blue-50 border-l-4 border-blue-400" : ""
+                        } ${isDragOver === item._id ? "bg-blue-50 border-l-4 border-blue-400" : ""} ${
+                          isSelected ? `${themeColors.bg} border-l-4 ${themeColors.border}` : ""
+                        }`}
                         onClick={(e) => {
                           if (selectMode) {
                             e.stopPropagation()
@@ -2180,7 +1792,6 @@ export default function FileManagerDepartmentPage() {
                             <Checkbox checked={isSelected} onCheckedChange={() => toggleItemSelection(item._id)} />
                           </div>
                         )}
-
                         <div className="flex items-center flex-1 min-w-0">
                           <div className="mr-3 sm:mr-4 p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-blue-50 group-hover:to-blue-100 transition-all duration-300">
                             {isFolder
@@ -2211,12 +1822,13 @@ export default function FileManagerDepartmentPage() {
                               {isFolder && (
                                 <Badge
                                   variant="secondary"
-                                  className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg ${folder!.isPublic || folder!.accessLevel === "public"
-                                    ? "bg-green-100 text-green-700"
-                                    : folder!.accessLevel === "private"
-                                      ? "bg-red-100 text-red-700"
-                                      : "bg-orange-100 text-orange-700"
-                                    }`}
+                                  className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg ${
+                                    folder!.isPublic || folder!.accessLevel === "public"
+                                      ? "bg-green-100 text-green-700"
+                                      : folder!.accessLevel === "private"
+                                        ? "bg-red-100 text-red-700"
+                                        : "bg-orange-100 text-orange-700"
+                                  }`}
                                 >
                                   {folder!.isPublic || folder!.accessLevel === "public"
                                     ? "Public"
@@ -2229,7 +1841,6 @@ export default function FileManagerDepartmentPage() {
                             <p className="text-xs sm:text-sm text-gray-500 truncate">{item.description}</p>
                           </div>
                         </div>
-
                         <div className="hidden md:flex items-center space-x-4 lg:space-x-8 text-xs sm:text-sm text-gray-500">
                           <span className="w-20 lg:w-24 text-right font-medium">
                             {isFolder ? `${folder!.fileCount || 0} files` : formatFileSize(file!.file.size)}
@@ -2245,7 +1856,6 @@ export default function FileManagerDepartmentPage() {
                             {formatDate(item.createdAt)}
                           </span>
                         </div>
-
                         {!selectMode && (
                           <div className="ml-3 sm:ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                             <DropdownMenu>
@@ -2308,11 +1918,11 @@ export default function FileManagerDepartmentPage() {
                                 )}
                                 {((isFolder && folder!.canDelete && !folder!.isDefault) ||
                                   (!isFolder && file!.canDelete)) && (
-                                    <DropdownMenuItem onClick={() => openDeleteDialog(item)} className="text-red-600">
-                                      <Trash2 className="w-4 h-4 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  )}
+                                  <DropdownMenuItem onClick={() => openDeleteDialog(item)} className="text-red-600">
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -2323,7 +1933,6 @@ export default function FileManagerDepartmentPage() {
                 </div>
               </div>
             )}
-
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
@@ -2383,7 +1992,6 @@ export default function FileManagerDepartmentPage() {
             )}
           </>
         )}
-
         {/* All Modals */}
         {/* Create Folder Modal */}
         <Dialog open={showCreateFolderModal} onOpenChange={setShowCreateFolderModal}>
@@ -2476,7 +2084,6 @@ export default function FileManagerDepartmentPage() {
             </div>
           </DialogContent>
         </Dialog>
-
         {/* Upload File Modal */}
         <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl">
@@ -2499,7 +2106,6 @@ export default function FileManagerDepartmentPage() {
             />
           </DialogContent>
         </Dialog>
-
         {/* Move Items Modal */}
         <Dialog open={showMoveModal} onOpenChange={setShowMoveModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
@@ -2560,7 +2166,6 @@ export default function FileManagerDepartmentPage() {
             </div>
           </DialogContent>
         </Dialog>
-
         {/* Bulk Delete Confirmation Dialog */}
         <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
           <AlertDialogContent className="rounded-2xl">
@@ -2591,7 +2196,6 @@ export default function FileManagerDepartmentPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
         {/* View File Modal */}
         <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
@@ -2667,7 +2271,6 @@ export default function FileManagerDepartmentPage() {
             )}
           </DialogContent>
         </Dialog>
-
         {/* View Folder Modal */}
         <Dialog open={showFolderViewModal} onOpenChange={setShowFolderViewModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
@@ -2743,7 +2346,6 @@ export default function FileManagerDepartmentPage() {
             )}
           </DialogContent>
         </Dialog>
-
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
           <AlertDialogContent className="rounded-2xl">
@@ -2778,7 +2380,6 @@ export default function FileManagerDepartmentPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
         {/* Edit File Modal */}
         <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
@@ -2877,7 +2478,6 @@ export default function FileManagerDepartmentPage() {
             )}
           </DialogContent>
         </Dialog>
-
         {/* Share Modal */}
         <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
           <DialogContent className="max-w-2xl rounded-2xl">
