@@ -22,6 +22,7 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingr
 // export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"
 // export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend-1.onrender.com"
 // export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend-2.onrender.com"
+// export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://puffingroup-backend-2.onrender.com"
 
 // Create an axios instance with default config
 const apiClient = axios.create({
